@@ -1,0 +1,1 @@
+-- Add missing DELETE policy for question_history table CREATE POLICY "Users can delete their own question history" ON question_history FOR DELETE USING (auth.uid() = user_id);
