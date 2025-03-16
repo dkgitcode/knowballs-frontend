@@ -65,7 +65,7 @@ export default function Sidebar({ onReset }: SidebarProps) {
   const { isOpen, toggle, close, open } = useSidebarStore()
   
   // GET AUTH STATE FROM HOOK 🔒
-  const { user, isLoading, signOut, checkAuth, forceRefresh } = useAuth()
+  const { user, isLoading, signOut, checkAuth } = useAuth()
 
   // DETERMINE ACTIVE ITEM BASED ON PATHNAME 🧭
   const getActiveItem = useCallback(() => {
@@ -110,42 +110,14 @@ export default function Sidebar({ onReset }: SidebarProps) {
     return () => window.removeEventListener('resize', checkIfMobile)
   }, [close, open])
 
-  // REFRESH AUTH ON ROUTE CHANGES 🔄
+  // SIMPLE AUTH CHECK ON MOUNT - NO FORCE REFRESHES OR COMPLEX LOGIC 🔒
   useEffect(() => {
-    // This effect will run whenever the pathname changes
-    console.log(`🧭 Route changed to: ${pathname}`);
-    
-    // If we're coming from login page to home, refresh auth
-    if (pathname === '/' && !user) {
-      console.log("⚡ Route changed from login to home - FORCE checking auth...");
-      forceRefresh();
-    }
-  }, [pathname, forceRefresh, user]);
-
-  // CHECK AUTH STATUS ON MOUNT AND HANDLE REFRESH EVENTS 🚀
-  useEffect(() => {
-    // TRACK LAST REFRESH TIME TO PREVENT SPAM ⏱️
-    let lastRefreshTime = 0;
-    const REFRESH_COOLDOWN = 2000; // 2 seconds cooldown
-    
     // INITIAL AUTH CHECK - ONLY ONCE ON MOUNT 🔍
     checkAuth();
     
-    // DEBOUNCED AUTH CHECK FUNCTION TO PREVENT SPAM 🛡️
-    const debouncedCheckAuth = () => {
-      const now = Date.now();
-      if (now - lastRefreshTime > REFRESH_COOLDOWN) {
-        console.log("🔄 Refreshing sidebar auth state (debounced)...");
-        checkAuth();
-        lastRefreshTime = now;
-      } else {
-        console.log("⏱️ Auth check skipped - on cooldown");
-      }
-    };
-    
     // LISTEN FOR LOGIN SUCCESS REFRESH EVENT 🔄
-    const handleLoginSuccess = (event: Event) => {
-      debouncedCheckAuth();
+    const handleLoginSuccess = () => {
+      checkAuth();
     };
     
     // ADD EVENT LISTENER FOR SPECIFIC LOGIN SUCCESS EVENT 📡
@@ -163,14 +135,12 @@ export default function Sidebar({ onReset }: SidebarProps) {
   const handleSignOut = async () => {
     // PREVENT MULTIPLE SIGN OUT ATTEMPTS 🛑
     if (isSigningOut) {
-      console.log("🛑 Sign out already in progress, ignoring duplicate request");
       return;
     }
     
     try {
       // SET SIGNING OUT FLAG TO PREVENT MULTIPLE ATTEMPTS 🚩
       setIsSigningOut(true);
-      console.log("👋 Initiating sign out process...");
       
       // Show loading toast ONLY ONCE ⚠️
       toast({
@@ -187,9 +157,6 @@ export default function Sidebar({ onReset }: SidebarProps) {
           title: "Signed out",
           description: "You have been successfully signed out.",
         });
-        
-        // IMPORTANT: Let the auth hook handle navigation
-        // DO NOT manually redirect here to avoid race conditions
       } else {
         // Show error toast
         toast({
@@ -198,19 +165,13 @@ export default function Sidebar({ onReset }: SidebarProps) {
           variant: "destructive",
         });
         
-        // ONLY redirect if the auth hook failed to do so
-        // Use a single redirect with a longer delay
-        setTimeout(() => {
-          // Check if we're still on the same page before redirecting
-          if (!window.location.pathname.includes('/login')) {
-            console.log("🔄 Manual redirect to login after sign out error");
-            window.location.href = '/login';
-          }
-        }, 3000);
+        // Simple redirect if needed
+        if (!window.location.pathname.includes('/login')) {
+          router.push('/login');
+        }
       }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      console.error("Sign out error:", errorMessage);
       
       toast({
         title: "Error signing out",
@@ -218,21 +179,13 @@ export default function Sidebar({ onReset }: SidebarProps) {
         variant: "destructive",
       });
       
-      // ONLY redirect if we're not already redirecting
-      // Use a single redirect with a longer delay
-      setTimeout(() => {
-        // Check if we're still on the same page before redirecting
-        if (!window.location.pathname.includes('/login')) {
-          console.log("🔄 Manual redirect to login after sign out exception");
-          window.location.href = '/login';
-        }
-      }, 3000);
+      // Simple redirect if needed
+      if (!window.location.pathname.includes('/login')) {
+        router.push('/login');
+      }
     } finally {
       // RESET SIGNING OUT FLAG AFTER COMPLETION OR ERROR 🔄
-      // Use a longer timeout to prevent any race conditions
-      setTimeout(() => {
-        setIsSigningOut(false);
-      }, 5000); // Keep the flag active for 5 seconds to prevent any issues
+      setIsSigningOut(false);
     }
   };
 

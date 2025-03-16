@@ -2,149 +2,124 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import { useSidebarStore } from "@/components/sidebar"
 import { login, signup } from "@/app/login/actions" // IMPORT SERVER ACTIONS DIRECTLY ✨
-import { useAuth } from "@/hooks/use-auth" // IMPORT AUTH HOOK FOR REFRESHING 🔄
 import { useRouter } from "next/navigation" // IMPORT ROUTER FOR NAVIGATION 🧭
 import { Loader2 } from "lucide-react" // IMPORT LOADER ICON FOR LOADING STATES ⏳
 
 // DEFINE PROPS FOR OUR COMPONENT 🔄
 interface LoginContentProps {
   error?: string;
-  onResetRef?: React.MutableRefObject<(() => void) | null>; // Reference to reset function
 }
 
-export default function LoginContent({ 
-  error,
-  onResetRef
-}: LoginContentProps) {
-  
+export default function LoginContent({ error }: LoginContentProps) {
   // GET SIDEBAR STATE FROM ZUSTAND STORE 🔄
   const { isOpen } = useSidebarStore()
-  
-  // GET AUTH FUNCTIONS FOR REFRESHING 🔄
-  const { forceRefresh, user } = useAuth()
   
   // GET ROUTER FOR NAVIGATION 🧭
   const router = useRouter()
   
-  // TRACK IF FORM WAS SUBMITTED 📝
-  const formSubmittedRef = useRef(false)
-  
-  // TRACK IF WE'VE ALREADY REFRESHED TO PREVENT LOOPS ⚠️
-  const [hasRefreshed, setHasRefreshed] = useState(false)
-  
   // ADD LOADING STATES FOR BUTTONS ⏳
-  const [isLoggingIn, setIsLoggingIn] = useState(false)
-  const [isSigningUp, setIsSigningUp] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [actionType, setActionType] = useState<'login' | 'signup' | null>(null)
 
-  // RESET FUNCTION FOR SIDEBAR INTEGRATION 🔄
-  const resetLogin = () => {
-    // RESET ALL FORM STATES TO DEFAULT VALUES 🔄✨
-    setIsLoggingIn(false);
-    setIsSigningUp(false);
-    formSubmittedRef.current = false;
-    setHasRefreshed(false);
-    // Any other state that needs resetting can be added here
-  }
-
-  // EXPOSE RESET FUNCTION VIA REF FOR EXTERNAL COMPONENTS 🔄
-  useEffect(() => {
-    if (onResetRef) {
-      onResetRef.current = resetLogin;
-    }
-    
-    // CLEANUP FUNCTION TO REMOVE REFERENCE WHEN COMPONENT UNMOUNTS 🧹
-    return () => {
-      if (onResetRef) {
-        onResetRef.current = null;
-      }
-    };
-  }, [onResetRef]);
-  
-  // REDIRECT TO HOME IF USER IS ALREADY LOGGED IN 🏠
-  useEffect(() => {
-    if (user) {
-      console.log("🔐 User already logged in, redirecting to home...");
-      router.push('/');
-    }
-  }, [user, router]);
-  
-  // CUSTOM FORM SUBMISSION HANDLERS WITH TRACKING 📝
+  // CUSTOM FORM SUBMISSION HANDLERS 📝
   const handleLogin = async (formData: FormData) => {
-    // Mark form as submitted
+    // PREVENT SUBMISSION WHILE LOADING ⚠️
+    if (isLoading) return;
     
-    
-    // SET LOADING STATE FOR LOGIN BUTTON ⏳
-    setIsLoggingIn(true);
-
-    formSubmittedRef.current = true;
-    setHasRefreshed(false); // Reset refresh flag when submitting
+    // SET LOADING STATE ⏳
+    setIsLoading(true);
+    setActionType('login');
     
     try {
-      // Call the server action
+      console.log("🚀 LOGGING IN...");
       await login(formData);
       
-      // Force a hard refresh of the page to ensure everything reloads properly
-      // This is a more reliable approach than trying to update state
-      window.location.href = '/';
+      // DISPATCH LOGIN SUCCESS EVENT TO UPDATE SIDEBAR 🔄
+      const loginSuccessEvent = new CustomEvent('loginSuccessRefresh');
+      window.dispatchEvent(loginSuccessEvent);
+      
+      // NAVIGATE PROGRAMMATICALLY AFTER LOGIN ✅
+      router.push('/');
+      router.refresh(); // Force a refresh to update the UI
     } catch (error) {
-      console.error("Login error:", error);
-      // RESET LOADING STATE ON ERROR ❌
-      setIsLoggingIn(false);
+      console.error("❌ LOGIN ERROR:", error);
+      
+      // HANDLE NEXT_REDIRECT ERROR SPECIALLY - THIS MEANS LOGIN SUCCEEDED! 🎉
+      if (error instanceof Error && error.message.includes('NEXT_REDIRECT')) {
+        console.log("✅ LOGIN SUCCESSFUL! Handling redirect...");
+        
+        // DISPATCH LOGIN SUCCESS EVENT TO UPDATE SIDEBAR 🔄
+        const loginSuccessEvent = new CustomEvent('loginSuccessRefresh');
+        window.dispatchEvent(loginSuccessEvent);
+        
+        // NAVIGATE PROGRAMMATICALLY AFTER LOGIN ✅
+        router.push('/');
+        router.refresh(); // Force a refresh to update the UI
+        return; // Exit early since this is actually a success case
+      }
+      
+      // ONLY SHOW ALERT FOR ACTUAL ERRORS ⚠️
+      alert("Login failed: " + (error instanceof Error ? error.message : "Unknown error"));
+    } finally {
+      setIsLoading(false);
+      setActionType(null);
     }
   };
   
   const handleSignup = async (formData: FormData) => {
-    // Mark form as submitted
-    formSubmittedRef.current = true;
-    setHasRefreshed(false); // Reset refresh flag when submitting
+    // PREVENT SUBMISSION WHILE LOADING ⚠️
+    if (isLoading) return;
     
-    // SET LOADING STATE FOR SIGNUP BUTTON ⏳
-    setIsSigningUp(true);
+    // SET LOADING STATE ⏳
+    setIsLoading(true);
+    setActionType('signup');
     
     try {
-      // Call the server action
+      console.log("🚀 SIGNING UP...");
       await signup(formData);
+      
+      // DISPATCH LOGIN SUCCESS EVENT TO UPDATE SIDEBAR 🔄
+      const loginSuccessEvent = new CustomEvent('loginSuccessRefresh');
+      window.dispatchEvent(loginSuccessEvent);
+      
+      // NAVIGATE PROGRAMMATICALLY AFTER SIGNUP ✅
+      router.push('/');
+      router.refresh(); // Force a refresh to update the UI
     } catch (error) {
-      console.error("Signup error:", error);
-      // RESET LOADING STATE ON ERROR ❌
-      setIsSigningUp(false);
+      console.error("❌ SIGNUP ERROR:", error);
+      
+      // HANDLE NEXT_REDIRECT ERROR SPECIALLY - THIS MEANS SIGNUP SUCCEEDED! 🎉
+      if (error instanceof Error && error.message.includes('NEXT_REDIRECT')) {
+        console.log("✅ SIGNUP SUCCESSFUL! Handling redirect...");
+        
+        // DISPATCH LOGIN SUCCESS EVENT TO UPDATE SIDEBAR 🔄
+        const loginSuccessEvent = new CustomEvent('loginSuccessRefresh');
+        window.dispatchEvent(loginSuccessEvent);
+        
+        // NAVIGATE PROGRAMMATICALLY AFTER SIGNUP ✅
+        router.push('/');
+        router.refresh(); // Force a refresh to update the UI
+        return; // Exit early since this is actually a success case
+      }
+      
+      // ONLY SHOW ALERT FOR ACTUAL ERRORS ⚠️
+      alert("Signup failed: " + (error instanceof Error ? error.message : "Unknown error"));
+    } finally {
+      setIsLoading(false);
+      setActionType(null);
     }
   };
-  
-  // REFRESH AUTH STATE AFTER REDIRECT BACK FROM SERVER ACTION ♻️
-  useEffect(() => {
-    // Check if we just came back from a form submission (URL has no error)
-    const params = new URLSearchParams(window.location.search);
-    const hasError = params.has('error');
-    
-    // ONLY REFRESH IF WE HAVEN'T ALREADY AND THERE'S NO ERROR ✅
-    if (!hasRefreshed && !hasError && window.location.pathname === '/login') {
-      // Set flag to prevent multiple refreshes
-      setHasRefreshed(true);
-      
-      // FORCE REFRESH AUTH STATE - BYPASS DEBOUNCING ⚡
-      forceRefresh().then((userData) => {
-        if (userData) {
-          // USER IS LOGGED IN - REDIRECT TO HOME 🏠
-          console.log("⚡ Auth state FORCE refreshed after login - REDIRECTING TO HOME");
-          router.push('/');
-        } else {
-          console.log("🔄 Auth check complete - No user found");
-        }
-      });
-    }
-  }, [forceRefresh, hasRefreshed, router]);
 
   return (
     <div 
       className={`transition-all duration-300 ${
         isOpen ? 'md:ml-60' : 'ml-0'
-      } min-h-screen justify-center bg-[hsl(var(--background))] p-2 pl-2 pr-2`}
+      } min-h-screen justify-center bg-[hsl(var(--background))] p-2`}
     >
-      {/* CONTENT CONTAINER WITH ROUNDED CORNERS AND BORDER INSTEAD OF TRIM ✨ */}
+      {/* CONTENT CONTAINER WITH ROUNDED CORNERS AND BORDER ✨ */}
       <div className="w-full h-[calc(100vh-1.25rem)] flex flex-col relative overflow-hidden content-container border border-border">
         {/* SCROLLABLE CONTENT AREA 📜 */}
         <div className="flex-1 overflow-y-auto custom-scrollbar px-8 py-8 flex items-center justify-center">
@@ -152,7 +127,7 @@ export default function LoginContent({
             {/* Header */}
             <div className="text-center mb-8">
               <h1 className="text-4xl font-bold mb-4">Welcome Back</h1>
-              <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+              <p className="text-muted-foreground text-lg">
                 Enter your credentials to sign in to your account
               </p>
             </div>
@@ -202,9 +177,9 @@ export default function LoginContent({
                     type="submit" 
                     formAction={handleLogin} 
                     className="w-full"
-                    disabled={isLoggingIn || isSigningUp}
+                    disabled={isLoading}
                   >
-                    {isLoggingIn ? (
+                    {actionType === 'login' ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Signing In...
@@ -218,9 +193,9 @@ export default function LoginContent({
                     formAction={handleSignup} 
                     variant="outline" 
                     className="w-full"
-                    disabled={isLoggingIn || isSigningUp}
+                    disabled={isLoading}
                   >
-                    {isSigningUp ? (
+                    {actionType === 'signup' ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Creating Account...
