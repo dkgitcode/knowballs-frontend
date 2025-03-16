@@ -205,6 +205,23 @@ export default function MainContent({
   // CHECK AUTHENTICATION STATUS BEFORE PROCEEDING WITH SEARCH 🔐
   const checkAuthentication = async (): Promise<boolean> => {
     try {
+      // IMPLEMENT SIMPLE CACHING TO PREVENT MULTIPLE CALLS IN QUICK SUCCESSION ⚡
+      // Check if we have a recent auth check result in memory
+      const AUTH_CACHE_KEY = 'auth_check_result';
+      const AUTH_CACHE_EXPIRY_KEY = 'auth_check_expiry';
+      
+      // Check if we have a cached result that's still valid
+      const cachedResult = sessionStorage.getItem(AUTH_CACHE_KEY);
+      const cacheExpiry = sessionStorage.getItem(AUTH_CACHE_EXPIRY_KEY);
+      
+      if (cachedResult && cacheExpiry && Date.now() < parseInt(cacheExpiry)) {
+        console.log("🔄 Using cached auth check result (valid for " + 
+          Math.round((parseInt(cacheExpiry) - Date.now()) / 1000) + " more seconds)");
+        return cachedResult === 'true';
+      }
+      
+      console.log("🔍 PERFORMING NEW AUTH CHECK - cache expired or not found");
+      
       // Make a lightweight request to check auth status
       const response = await fetch('/api/auth/check', {
         method: 'GET',
@@ -214,18 +231,25 @@ export default function MainContent({
       });
       
       // If we get a 401, user is not authenticated
-      if (response.status === 401) {
-        return false;
+      const isAuthenticated = response.status !== 401;
+      
+      // CACHE THE RESULT FOR 30 SECONDS TO PREVENT MULTIPLE CALLS 🕒
+      try {
+        sessionStorage.setItem(AUTH_CACHE_KEY, isAuthenticated.toString());
+        sessionStorage.setItem(AUTH_CACHE_EXPIRY_KEY, (Date.now() + 30000).toString()); // 30 second cache
+        console.log("✅ Auth check result cached for 30 seconds");
+      } catch (cacheError) {
+        console.warn("Could not cache auth result:", cacheError);
       }
       
-      // Any other non-200 response is treated as an error but not necessarily auth-related
-      if (!response.ok) {
+      // Any non-200 response that's not 401 is treated as an error but not necessarily auth-related
+      if (!response.ok && response.status !== 401) {
         console.error(`Auth check failed with status ${response.status}`);
         // We'll assume auth is OK and let the main request handle any other errors
         return true;
       }
       
-      return true;
+      return isAuthenticated;
     } catch (err) {
       console.error("❌ ERROR CHECKING AUTHENTICATION:", err);
       // On error, we'll assume auth is OK and let the main request handle any issues

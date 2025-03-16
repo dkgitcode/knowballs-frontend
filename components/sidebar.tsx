@@ -157,22 +157,83 @@ export default function Sidebar({ onReset }: SidebarProps) {
   }, [checkAuth]);
 
   // HANDLE SIGN OUT 👋
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  
   const handleSignOut = async () => {
+    // PREVENT MULTIPLE SIGN OUT ATTEMPTS 🛑
+    if (isSigningOut) {
+      console.log("🛑 Sign out already in progress, ignoring duplicate request");
+      return;
+    }
+    
     try {
-      await signOut()
+      // SET SIGNING OUT FLAG TO PREVENT MULTIPLE ATTEMPTS 🚩
+      setIsSigningOut(true);
+      console.log("👋 Initiating sign out process...");
+      
+      // Show loading toast ONLY ONCE ⚠️
       toast({
-        title: "Signed out",
-        description: "You have been successfully signed out.",
-      })
+        title: "Signing out...",
+        description: "Please wait while we sign you out.",
+      });
+      
+      // Call the sign out function from the auth hook
+      const result = await signOut();
+      
+      if (result.success) {
+        // Show success toast
+        toast({
+          title: "Signed out",
+          description: "You have been successfully signed out.",
+        });
+        
+        // IMPORTANT: Let the auth hook handle navigation
+        // DO NOT manually redirect here to avoid race conditions
+      } else {
+        // Show error toast
+        toast({
+          title: "Error signing out",
+          description: result.error || "An unknown error occurred",
+          variant: "destructive",
+        });
+        
+        // ONLY redirect if the auth hook failed to do so
+        // Use a single redirect with a longer delay
+        setTimeout(() => {
+          // Check if we're still on the same page before redirecting
+          if (!window.location.pathname.includes('/login')) {
+            console.log("🔄 Manual redirect to login after sign out error");
+            window.location.href = '/login';
+          }
+        }, 3000);
+      }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error("Sign out error:", errorMessage);
+      
       toast({
         title: "Error signing out",
         description: errorMessage,
         variant: "destructive",
-      })
+      });
+      
+      // ONLY redirect if we're not already redirecting
+      // Use a single redirect with a longer delay
+      setTimeout(() => {
+        // Check if we're still on the same page before redirecting
+        if (!window.location.pathname.includes('/login')) {
+          console.log("🔄 Manual redirect to login after sign out exception");
+          window.location.href = '/login';
+        }
+      }, 3000);
+    } finally {
+      // RESET SIGNING OUT FLAG AFTER COMPLETION OR ERROR 🔄
+      // Use a longer timeout to prevent any race conditions
+      setTimeout(() => {
+        setIsSigningOut(false);
+      }, 5000); // Keep the flag active for 5 seconds to prevent any issues
     }
-  }
+  };
 
   // HANDLE HISTORY ITEM SELECTION 📚
   const handleSelectQuestion = (item: {

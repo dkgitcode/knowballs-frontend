@@ -32,7 +32,8 @@ export async function GET() {
       console.log("🚨 Session not found despite having user - possible token issue")
       
       // CLEAR ANY INVALID COOKIES 🍪
-      cookies().delete('supabase-auth-token')
+      const cookieStore = await cookies()
+      cookieStore.delete('supabase-auth-token')
       
       return NextResponse.json({ 
         authenticated: false,

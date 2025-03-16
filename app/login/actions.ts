@@ -78,13 +78,39 @@ export async function signup(formData: FormData) {
 
 // SIGNOUT ACTION - HANDLES USER LOGOUT 🚪
 export async function signOut() {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
+  console.log("🚪 Server action: Signing out user...");
   
-  // CLEAR AUTH COOKIES 🍪
-  const cookieStore = await cookies()
-  cookieStore.delete('supabase-auth-token')
-  
-  revalidatePath('/')
-  redirect('/login')
+  try {
+    const supabase = await createClient()
+    
+    // PREVENT MULTIPLE SIGN OUT ATTEMPTS BY CHECKING COOKIES FIRST 🍪
+    const cookieStore = await cookies()
+    const hasAuthCookie = cookieStore.has('supabase-auth-token')
+    
+    if (!hasAuthCookie) {
+      console.log("⚠️ Server action: No auth cookie found, user might already be signed out");
+      return { success: true };
+    }
+    
+    const { error } = await supabase.auth.signOut()
+    
+    if (error) {
+      console.error("🚨 Server action sign out error:", error.message);
+      return { success: false, error: error.message };
+    }
+    
+    // CLEAR AUTH COOKIES 🍪
+    cookieStore.delete('supabase-auth-token')
+    
+    // FORCE REVALIDATION OF ALL PATHS TO REFRESH DATA 🔄
+    revalidatePath('/', 'layout')
+    
+    console.log("✅ Server action: User signed out successfully");
+    
+    // Return success instead of redirecting
+    return { success: true };
+  } catch (error) {
+    console.error("🚨 Unexpected error in signOut server action:", error);
+    return { success: false, error: 'An unexpected error occurred' };
+  }
 } 
