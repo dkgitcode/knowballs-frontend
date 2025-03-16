@@ -64,7 +64,7 @@ export default function Sidebar({ onReset }: SidebarProps) {
   const { isOpen, toggle, close, open } = useSidebarStore()
   
   // GET AUTH STATE FROM HOOK 🔒
-  const { user, isLoading, signOut } = useAuth()
+  const { user, isLoading, signOut, checkAuth, forceRefresh } = useAuth()
 
   // DETERMINE ACTIVE ITEM BASED ON PATHNAME 🧭
   const getActiveItem = useCallback(() => {
@@ -108,6 +108,53 @@ export default function Sidebar({ onReset }: SidebarProps) {
     // Cleanup
     return () => window.removeEventListener('resize', checkIfMobile)
   }, [close, open])
+
+  // REFRESH AUTH ON ROUTE CHANGES 🔄
+  useEffect(() => {
+    // This effect will run whenever the pathname changes
+    console.log(`🧭 Route changed to: ${pathname}`);
+    
+    // If we're coming from login page to home, refresh auth
+    if (pathname === '/' && !user) {
+      console.log("⚡ Route changed from login to home - FORCE checking auth...");
+      forceRefresh();
+    }
+  }, [pathname, forceRefresh, user]);
+
+  // CHECK AUTH STATUS ON MOUNT AND HANDLE REFRESH EVENTS 🚀
+  useEffect(() => {
+    // TRACK LAST REFRESH TIME TO PREVENT SPAM ⏱️
+    let lastRefreshTime = 0;
+    const REFRESH_COOLDOWN = 2000; // 2 seconds cooldown
+    
+    // INITIAL AUTH CHECK - ONLY ONCE ON MOUNT 🔍
+    checkAuth();
+    
+    // DEBOUNCED AUTH CHECK FUNCTION TO PREVENT SPAM 🛡️
+    const debouncedCheckAuth = () => {
+      const now = Date.now();
+      if (now - lastRefreshTime > REFRESH_COOLDOWN) {
+        console.log("🔄 Refreshing sidebar auth state (debounced)...");
+        checkAuth();
+        lastRefreshTime = now;
+      } else {
+        console.log("⏱️ Auth check skipped - on cooldown");
+      }
+    };
+    
+    // LISTEN FOR LOGIN SUCCESS REFRESH EVENT 🔄
+    const handleLoginSuccess = (event: Event) => {
+      debouncedCheckAuth();
+    };
+    
+    // ADD EVENT LISTENER FOR SPECIFIC LOGIN SUCCESS EVENT 📡
+    window.addEventListener('loginSuccessRefresh', handleLoginSuccess);
+    
+    // CLEANUP EVENT LISTENER ON UNMOUNT 🧹
+    return () => {
+      window.removeEventListener('loginSuccessRefresh', handleLoginSuccess);
+    };
+  }, [checkAuth]);
 
   // HANDLE SIGN OUT 👋
   const handleSignOut = async () => {

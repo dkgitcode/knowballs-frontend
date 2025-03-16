@@ -3,6 +3,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { cookies } from 'next/headers'
 
 // LOGIN ACTION - HANDLES USER SIGN IN 🔐
 export async function login(formData: FormData) {
@@ -16,7 +17,7 @@ export async function login(formData: FormData) {
 
   const supabase = await createClient()
   
-  const { error } = await supabase.auth.signInWithPassword({
+  const { error, data } = await supabase.auth.signInWithPassword({
     email,
     password,
   })
@@ -26,7 +27,23 @@ export async function login(formData: FormData) {
     return redirect(`/login?error=${encodeURIComponent(error.message)}`)
   }
 
-  revalidatePath('/')
+  // ENSURE SESSION IS PROPERLY SET IN COOKIES 🍪
+  if (data?.session) {
+    // Store the session in cookies to ensure it persists
+    const cookieStore = await cookies()
+    cookieStore.set('supabase-auth-token', JSON.stringify(data.session), {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    })
+  }
+
+  // FORCE REVALIDATION OF ALL PATHS TO REFRESH DATA 🔄
+  revalidatePath('/', 'layout')
+  
+  // REDIRECT TO HOME PAGE 🏠
   redirect('/')
 }
 
@@ -63,6 +80,10 @@ export async function signup(formData: FormData) {
 export async function signOut() {
   const supabase = await createClient()
   await supabase.auth.signOut()
+  
+  // CLEAR AUTH COOKIES 🍪
+  const cookieStore = await cookies()
+  cookieStore.delete('supabase-auth-token')
   
   revalidatePath('/')
   redirect('/login')

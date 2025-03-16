@@ -2,8 +2,11 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
-import { useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useSidebarStore } from "@/components/sidebar"
+import { login, signup } from "@/app/login/actions" // IMPORT SERVER ACTIONS DIRECTLY ✨
+import { useAuth } from "@/hooks/use-auth" // IMPORT AUTH HOOK FOR REFRESHING 🔄
+import { useRouter } from "next/navigation" // IMPORT ROUTER FOR NAVIGATION 🧭
 
 // DEFINE PROPS FOR OUR COMPONENT 🔄
 interface LoginContentProps {
@@ -18,6 +21,18 @@ export default function LoginContent({
   
   // GET SIDEBAR STATE FROM ZUSTAND STORE 🔄
   const { isOpen } = useSidebarStore()
+  
+  // GET AUTH FUNCTIONS FOR REFRESHING 🔄
+  const { forceRefresh, user } = useAuth()
+  
+  // GET ROUTER FOR NAVIGATION 🧭
+  const router = useRouter()
+  
+  // TRACK IF FORM WAS SUBMITTED 📝
+  const formSubmittedRef = useRef(false)
+  
+  // TRACK IF WE'VE ALREADY REFRESHED TO PREVENT LOOPS ⚠️
+  const [hasRefreshed, setHasRefreshed] = useState(false)
 
   // RESET FUNCTION FOR SIDEBAR INTEGRATION 🔄
   const resetLogin = () => {
@@ -37,61 +52,69 @@ export default function LoginContent({
       }
     };
   }, [onResetRef]);
-
-  // HANDLE LOGIN AND SIGNUP ACTIONS 🔐
+  
+  // REDIRECT TO HOME IF USER IS ALREADY LOGGED IN 🏠
+  useEffect(() => {
+    if (user) {
+      console.log("🔐 User already logged in, redirecting to home...");
+      router.push('/');
+    }
+  }, [user, router]);
+  
+  // CUSTOM FORM SUBMISSION HANDLERS WITH TRACKING 📝
   const handleLogin = async (formData: FormData) => {
-    const email = formData.get('email') as string
-    const password = formData.get('password') as string
+    // Mark form as submitted
+    formSubmittedRef.current = true;
+    setHasRefreshed(false); // Reset refresh flag when submitting
     
     try {
-      // Submit the form to the server action
-      const form = document.createElement('form')
-      form.method = 'POST'
-      form.action = '/api/auth/login'
+      // Call the server action
+      await login(formData);
       
-      const emailInput = document.createElement('input')
-      emailInput.name = 'email'
-      emailInput.value = email
-      form.appendChild(emailInput)
-      
-      const passwordInput = document.createElement('input')
-      passwordInput.name = 'password'
-      passwordInput.value = password
-      form.appendChild(passwordInput)
-      
-      document.body.appendChild(form)
-      form.submit()
+      // Force a hard refresh of the page to ensure everything reloads properly
+      // This is a more reliable approach than trying to update state
+      window.location.href = '/';
     } catch (error) {
-      console.error('Login error:', error)
+      console.error("Login error:", error);
     }
-  }
+  };
   
   const handleSignup = async (formData: FormData) => {
-    const email = formData.get('email') as string
-    const password = formData.get('password') as string
+    // Mark form as submitted
+    formSubmittedRef.current = true;
+    setHasRefreshed(false); // Reset refresh flag when submitting
     
     try {
-      // Submit the form to the server action
-      const form = document.createElement('form')
-      form.method = 'POST'
-      form.action = '/api/auth/signup'
-      
-      const emailInput = document.createElement('input')
-      emailInput.name = 'email'
-      emailInput.value = email
-      form.appendChild(emailInput)
-      
-      const passwordInput = document.createElement('input')
-      passwordInput.name = 'password'
-      passwordInput.value = password
-      form.appendChild(passwordInput)
-      
-      document.body.appendChild(form)
-      form.submit()
+      // Call the server action
+      await signup(formData);
     } catch (error) {
-      console.error('Signup error:', error)
+      console.error("Signup error:", error);
     }
-  }
+  };
+  
+  // REFRESH AUTH STATE AFTER REDIRECT BACK FROM SERVER ACTION ♻️
+  useEffect(() => {
+    // Check if we just came back from a form submission (URL has no error)
+    const params = new URLSearchParams(window.location.search);
+    const hasError = params.has('error');
+    
+    // ONLY REFRESH IF WE HAVEN'T ALREADY AND THERE'S NO ERROR ✅
+    if (!hasRefreshed && !hasError && window.location.pathname === '/login') {
+      // Set flag to prevent multiple refreshes
+      setHasRefreshed(true);
+      
+      // FORCE REFRESH AUTH STATE - BYPASS DEBOUNCING ⚡
+      forceRefresh().then((userData) => {
+        if (userData) {
+          // USER IS LOGGED IN - REDIRECT TO HOME 🏠
+          console.log("⚡ Auth state FORCE refreshed after login - REDIRECTING TO HOME");
+          router.push('/');
+        } else {
+          console.log("🔄 Auth check complete - No user found");
+        }
+      });
+    }
+  }, [forceRefresh, hasRefreshed, router]);
 
   return (
     <div 

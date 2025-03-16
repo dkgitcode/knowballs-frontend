@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 
 // AUTH CHECK API ROUTE - VERIFIES IF USER IS AUTHENTICATED 🔒
 export async function GET() {
@@ -23,6 +24,24 @@ export async function GET() {
         message: 'No active session found'
       }, { status: 401 })
     }
+    
+    // VERIFY SESSION IS ACTIVE 🔐
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
+      console.log("🚨 Session not found despite having user - possible token issue")
+      
+      // CLEAR ANY INVALID COOKIES 🍪
+      cookies().delete('supabase-auth-token')
+      
+      return NextResponse.json({ 
+        authenticated: false,
+        message: 'Session expired or invalid'
+      }, { status: 401 })
+    }
+    
+    // LOG SUCCESSFUL AUTH CHECK FOR DEBUGGING 📝
+    console.log(`✅ Auth check successful for user: ${user.id.substring(0, 8)}...`)
     
     // FETCH ADDITIONAL USER PROFILE DATA IF NEEDED 📋
     // Uncomment and modify if you have a profiles table
