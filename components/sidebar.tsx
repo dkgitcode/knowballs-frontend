@@ -14,7 +14,8 @@ import {
   User,
   LogOut,
   History,
-  Sparkles
+  Sparkles,
+  Loader2
 } from "lucide-react" 
 
 // CREATE A GLOBAL STATE FOR SIDEBAR VISIBILITY 🌐
@@ -445,9 +446,14 @@ export default function Sidebar({ onReset }: SidebarProps) {
                   size="sm" 
                   className="w-full justify-start"
                   onClick={handleSignOut}
+                  disabled={isSigningOut}
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign out
+                  {isSigningOut ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <LogOut className="mr-2 h-4 w-4" />
+                  )}
+                  {isSigningOut ? "Signing out..." : "Sign out"}
                 </Button>
               </div>
             ) : (
@@ -613,9 +619,14 @@ export default function Sidebar({ onReset }: SidebarProps) {
                 size="sm" 
                 className="w-full justify-start"
                 onClick={handleSignOut}
+                disabled={isSigningOut}
               >
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign out
+                {isSigningOut ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <LogOut className="mr-2 h-4 w-4" />
+                )}
+                {isSigningOut ? "Signing out..." : "Sign out"}
               </Button>
             </div>
           ) : (

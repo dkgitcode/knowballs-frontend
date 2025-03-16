@@ -7,6 +7,7 @@ import { useSidebarStore } from "@/components/sidebar"
 import { login, signup } from "@/app/login/actions" // IMPORT SERVER ACTIONS DIRECTLY ✨
 import { useAuth } from "@/hooks/use-auth" // IMPORT AUTH HOOK FOR REFRESHING 🔄
 import { useRouter } from "next/navigation" // IMPORT ROUTER FOR NAVIGATION 🧭
+import { Loader2 } from "lucide-react" // IMPORT LOADER ICON FOR LOADING STATES ⏳
 
 // DEFINE PROPS FOR OUR COMPONENT 🔄
 interface LoginContentProps {
@@ -33,6 +34,10 @@ export default function LoginContent({
   
   // TRACK IF WE'VE ALREADY REFRESHED TO PREVENT LOOPS ⚠️
   const [hasRefreshed, setHasRefreshed] = useState(false)
+  
+  // ADD LOADING STATES FOR BUTTONS ⏳
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [isSigningUp, setIsSigningUp] = useState(false)
 
   // RESET FUNCTION FOR SIDEBAR INTEGRATION 🔄
   const resetLogin = () => {
@@ -67,6 +72,9 @@ export default function LoginContent({
     formSubmittedRef.current = true;
     setHasRefreshed(false); // Reset refresh flag when submitting
     
+    // SET LOADING STATE FOR LOGIN BUTTON ⏳
+    setIsLoggingIn(true);
+    
     try {
       // Call the server action
       await login(formData);
@@ -76,6 +84,8 @@ export default function LoginContent({
       window.location.href = '/';
     } catch (error) {
       console.error("Login error:", error);
+      // RESET LOADING STATE ON ERROR ❌
+      setIsLoggingIn(false);
     }
   };
   
@@ -84,11 +94,16 @@ export default function LoginContent({
     formSubmittedRef.current = true;
     setHasRefreshed(false); // Reset refresh flag when submitting
     
+    // SET LOADING STATE FOR SIGNUP BUTTON ⏳
+    setIsSigningUp(true);
+    
     try {
       // Call the server action
       await signup(formData);
     } catch (error) {
       console.error("Signup error:", error);
+      // RESET LOADING STATE ON ERROR ❌
+      setIsSigningUp(false);
     }
   };
   
@@ -176,11 +191,36 @@ export default function LoginContent({
                 )}
                 
                 <div className="flex flex-col space-y-2 pt-2">
-                  <Button type="submit" formAction={handleLogin} className="w-full">
-                    Sign In
+                  <Button 
+                    type="submit" 
+                    formAction={handleLogin} 
+                    className="w-full"
+                    disabled={isLoggingIn || isSigningUp}
+                  >
+                    {isLoggingIn ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Signing In...
+                      </>
+                    ) : (
+                      "Sign In"
+                    )}
                   </Button>
-                  <Button type="submit" formAction={handleSignup} variant="outline" className="w-full">
-                    Create Account
+                  <Button 
+                    type="submit" 
+                    formAction={handleSignup} 
+                    variant="outline" 
+                    className="w-full"
+                    disabled={isLoggingIn || isSigningUp}
+                  >
+                    {isSigningUp ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating Account...
+                      </>
+                    ) : (
+                      "Create Account"
+                    )}
                   </Button>
                 </div>
               </form>

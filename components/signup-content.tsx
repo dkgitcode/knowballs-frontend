@@ -2,8 +2,9 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useSidebarStore } from "@/components/sidebar"
+import { Loader2 } from "lucide-react"
 
 // DEFINE PROPS FOR OUR COMPONENT 🔄
 interface SignupContentProps {
@@ -18,6 +19,9 @@ export default function SignupContent({
   
   // GET SIDEBAR STATE FROM ZUSTAND STORE 🔄
   const { isOpen } = useSidebarStore()
+  
+  // ADD LOADING STATE FOR SIGNUP BUTTON ⏳
+  const [isSigningUp, setIsSigningUp] = useState(false)
 
   // RESET FUNCTION FOR SIDEBAR INTEGRATION 🔄
   const resetSignup = () => {
@@ -43,6 +47,9 @@ export default function SignupContent({
     const email = formData.get('email') as string
     const password = formData.get('password') as string
     
+    // SET LOADING STATE FOR SIGNUP BUTTON ⏳
+    setIsSigningUp(true)
+    
     try {
       // Submit the form to the server action
       const form = document.createElement('form')
@@ -63,6 +70,8 @@ export default function SignupContent({
       form.submit()
     } catch (error) {
       console.error('Signup error:', error)
+      // RESET LOADING STATE ON ERROR ❌
+      setIsSigningUp(false)
     }
   }
 
@@ -121,8 +130,20 @@ export default function SignupContent({
                 )}
                 
                 <div className="flex flex-col space-y-2 pt-2">
-                  <Button type="submit" formAction={handleSignup} className="w-full">
-                    Create Account
+                  <Button 
+                    type="submit" 
+                    formAction={handleSignup} 
+                    className="w-full"
+                    disabled={isSigningUp}
+                  >
+                    {isSigningUp ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating Account...
+                      </>
+                    ) : (
+                      "Create Account"
+                    )}
                   </Button>
                 </div>
               </form>
