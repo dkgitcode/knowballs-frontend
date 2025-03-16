@@ -99,7 +99,7 @@
   
   /* CONTENT AREA STYLES 📄 */
   .content-area {
-    @apply bg-[hsl(var(--content-bg))] rounded-lg p-6 shadow-sm;
+    @apply bg-[hsl(var(--content-bg))] rounded-lg shadow-sm;
   }
   
   .outer-area {
