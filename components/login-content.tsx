@@ -2,9 +2,8 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 import { useSidebarStore } from "@/components/sidebar"
-import { useRouter } from "next/navigation"
 
 // DEFINE PROPS FOR OUR COMPONENT 🔄
 interface LoginContentProps {
@@ -16,7 +15,6 @@ export default function LoginContent({
   error,
   onResetRef
 }: LoginContentProps) {
-  const router = useRouter()
   
   // GET SIDEBAR STATE FROM ZUSTAND STORE 🔄
   const { isOpen } = useSidebarStore()
@@ -165,7 +163,7 @@ export default function LoginContent({
               </form>
               
               <div className="text-center text-sm mt-6">
-                Don't have an account?{' '}
+                Don&apos;t have an account?{' '}
                 <Link href="/signup" className="text-primary hover:underline">
                   Sign up
                 </Link>

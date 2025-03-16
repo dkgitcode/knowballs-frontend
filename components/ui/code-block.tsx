@@ -6,7 +6,7 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 interface CodeBlockProps {
   className?: string;
   children: React.ReactNode;
-  [key: string]: any; // For any other props that might be passed
+  [key: string]: unknown; // For any other props that might be passed
 }
 
 // REUSABLE CODE BLOCK COMPONENT FOR MARKDOWN RENDERING 🎨
@@ -19,7 +19,7 @@ export const CodeBlock = ({ className, children, ...props }: CodeBlockProps) => 
     <div className="my-6 rounded-md overflow-hidden">
       <div className="bg-slate-800 text-slate-200 text-xs px-4 py-1 flex items-center justify-between">
         <span>{language.toUpperCase()}</span>
-        <span className="text-slate-400 text-xs">// CODE EXAMPLE 💻</span>
+        <span className="text-slate-400 text-xs">{'// CODE EXAMPLE 💻'}</span>
       </div>
       <SyntaxHighlighter
         language={language}

@@ -1,8 +1,7 @@
 "use client"
 import SearchInput from "@/components/search-input"
-import FollowUpInput from "@/components/follow-up-input"
 import { useSidebarStore } from "@/components/sidebar"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import SampleInput from "@/components/sample-input"
 import DynamicLesson from "@/components/dynamic-lesson"
 import { useToast } from "@/hooks/use-toast"
@@ -271,7 +270,7 @@ export default function MainContent({
   }
 
   // DEFINE RESET CHAT FUNCTION BEFORE USING IT IN USEEFFECT 🧹
-  const resetChat = () => {
+  const resetChat = useCallback(() => {
     setIsLoading(false)
     setIsRemoved(false)
     setShowData(false)
@@ -284,11 +283,11 @@ export default function MainContent({
     if (controllerRef.current) {
       controllerRef.current.abort();
     }
-  }
+  }, [initialMode]);
 
   // LISTEN FOR HISTORY QUESTION EVENTS 👂
   useEffect(() => {
-    const handleHistoryQuestion = (event: any) => {
+    const handleHistoryQuestion = (event: CustomEvent<{prompt: string; answer: string; mode: 'answer' | 'visualizer'}>) => {
       const { prompt, answer, mode } = event.detail
       loadQuestionFromHistory(prompt, answer, mode)
     }
@@ -340,7 +339,7 @@ export default function MainContent({
         onResetRef.current = null;
       }
     };
-  }, [onResetRef, initialMode]); // Include initialMode in dependencies
+  }, [onResetRef, resetChat]); // Include resetChat in dependencies
 
   return (
     <div 
@@ -416,7 +415,7 @@ export default function MainContent({
             {showData && data && !error && (
               <div className="flex-1 flex items-start justify-start w-full animate-fade-in opacity-0">
                 <div className="w-full content-area">
-                  <DynamicLesson data={data} prompt={userPrompt} answer={answer} />
+                  <DynamicLesson answer={answer} />
                 </div>
               </div>
             )}

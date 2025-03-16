@@ -1,14 +1,10 @@
 "use client"
 
 import HistoryContent from '@/components/history-content'
-import { useRef } from 'react'
 
-interface HistoryPageClientProps {
-  onResetRef?: React.MutableRefObject<(() => void) | null>
-}
 
-export default function HistoryPageClient({ onResetRef }: HistoryPageClientProps) {
+export default function HistoryPageClient() {
   return (
-    <HistoryContent onResetRef={onResetRef} />
+    <HistoryContent />
   )
 } 

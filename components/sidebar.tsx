@@ -1,31 +1,19 @@
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter, usePathname } from "next/navigation"
-import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import HistoryList from "@/components/history-list"
 
 // IMPORT ICONS FOR SIDEBAR NAVIGATION 🧭
 import { 
-  Home, 
-  Compass, 
-  Layers, 
-  BookOpen,
   LogIn,
   UserPlus,
   ChevronLeft,
   Menu,
-  DollarSign,
-  BarChart,
   User,
   LogOut,
   History,
-  ChevronDown,
-  ChevronRight,
-  Clock,
-  PlusCircle,
-  MessageSquarePlus,
   Sparkles
 } from "lucide-react" 
 
@@ -71,7 +59,6 @@ export default function Sidebar({ onReset }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const [isMobile, setIsMobile] = useState(false)
-  const [sidebarSearchQuery, setSidebarSearchQuery] = useState("")
   
   // GET SIDEBAR STATE FROM ZUSTAND STORE 🔄
   const { isOpen, toggle, close, open } = useSidebarStore()
@@ -80,7 +67,7 @@ export default function Sidebar({ onReset }: SidebarProps) {
   const { user, isLoading, signOut } = useAuth()
 
   // DETERMINE ACTIVE ITEM BASED ON PATHNAME 🧭
-  const getActiveItem = () => {
+  const getActiveItem = useCallback(() => {
     if (pathname === '/') return 'Home';
     if (pathname === '/pricing') return 'Pricing';
     if (pathname === '/profile') return 'Profile';
@@ -88,7 +75,7 @@ export default function Sidebar({ onReset }: SidebarProps) {
     if (pathname === '/signup') return 'Signup';
     if (pathname === '/history') return 'History';
     return '';
-  }
+  }, [pathname]);
 
   // SET ACTIVE ITEM BASED ON PATHNAME
   const [activeItem, setActiveItem] = useState(getActiveItem());
@@ -96,7 +83,7 @@ export default function Sidebar({ onReset }: SidebarProps) {
   // UPDATE ACTIVE ITEM WHEN PATHNAME CHANGES
   useEffect(() => {
     setActiveItem(getActiveItem());
-  }, [pathname]);
+  }, [pathname, getActiveItem]);
 
   // CHECK IF VIEWPORT IS MOBILE SIZE 📱
   useEffect(() => {
@@ -122,13 +109,6 @@ export default function Sidebar({ onReset }: SidebarProps) {
     return () => window.removeEventListener('resize', checkIfMobile)
   }, [close, open])
 
-  const showDemoToast = () => {
-    toast({
-      title: "Oops!",
-      description: "This is just a demo application!",
-    })
-  }
-
   // HANDLE SIGN OUT 👋
   const handleSignOut = async () => {
     try {
@@ -137,17 +117,22 @@ export default function Sidebar({ onReset }: SidebarProps) {
         title: "Signed out",
         description: "You have been successfully signed out.",
       })
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       toast({
         title: "Error signing out",
-        description: error.message || "An error occurred while signing out",
+        description: errorMessage,
         variant: "destructive",
       })
     }
   }
 
   // HANDLE HISTORY ITEM SELECTION 📚
-  const handleSelectQuestion = (item: any) => {
+  const handleSelectQuestion = (item: {
+    prompt: string;
+    answer: string;
+    mode: 'answer' | 'visualizer';
+  }) => {
     // Close sidebar on mobile
     if (isMobile) {
       close()
@@ -170,14 +155,24 @@ export default function Sidebar({ onReset }: SidebarProps) {
     }, 100)
   }
 
-  // HANDLE SIDEBAR SEARCH INPUT CHANGE 🔍
-  const handleSidebarSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSidebarSearchQuery(e.target.value)
-  }
-
-  // CLEAR SIDEBAR SEARCH QUERY 🧹
-  const clearSidebarSearch = () => {
-    setSidebarSearchQuery("")
+  // HANDLE NEW QUESTION BUTTON CLICK 🆕
+  const handleNewQuestion = () => {
+    // Close sidebar on mobile
+    if (isMobile) {
+      close()
+    }
+    
+    // Navigate to home
+    router.push('/')
+    
+    // Reset the main content
+    if (onReset) {
+      onReset()
+    }
+    
+    // DISPATCH RESET EVENT TO CLEAR MAIN CONTENT 🧹
+    const resetEvent = new CustomEvent('resetMainContent')
+    window.dispatchEvent(resetEvent)
   }
 
   // NAVIGATION ITEMS WITH UPDATED PATHS 
@@ -226,34 +221,6 @@ export default function Sidebar({ onReset }: SidebarProps) {
       router.push('/profile');
     } else {
       router.push('/login');
-    }
-  }
-
-  const [historyExpanded, setHistoryExpanded] = useState(true)
-
-  // TOGGLE HISTORY SECTION VISIBILITY 📚
-  const toggleHistory = () => {
-    setHistoryExpanded(!historyExpanded)
-  }
-
-  // CREATE NEW QUESTION FUNCTION 🆕
-  const handleNewQuestion = () => {
-    // CALL THE RESET FUNCTION TO CLEAR THE STATE IN MAIN-CONTENT ✨
-    if (onReset) onReset();
-    
-    // DISPATCH A CUSTOM EVENT TO FORCE RESET THE MAIN CONTENT 🔄
-    const resetEvent = new CustomEvent('resetMainContent');
-    window.dispatchEvent(resetEvent);
-    
-    // RESET ACTIVE ITEM TO HOME TO REMOVE FOCUS FROM HISTORY ITEMS 🏠
-    setActiveItem('Home');
-    
-    // Navigate to home page
-    router.push('/');
-    
-    // Close sidebar on mobile after navigation
-    if (isMobile) {
-      close()
     }
   }
 
@@ -343,7 +310,6 @@ export default function Sidebar({ onReset }: SidebarProps) {
                
                 <HistoryList 
                   onSelectQuestion={handleSelectQuestion} 
-                  searchQuery={sidebarSearchQuery}
                 />
 
               </div>
@@ -513,7 +479,6 @@ export default function Sidebar({ onReset }: SidebarProps) {
             <div className="mt-2 pl-8">
               <HistoryList 
                 onSelectQuestion={handleSelectQuestion} 
-                searchQuery={sidebarSearchQuery}
               />
             </div>
           )}

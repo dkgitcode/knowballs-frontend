@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useSidebarStore } from "@/components/sidebar"
 import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
-import { User, Mail, Calendar, Shield, LogOut, Edit } from "lucide-react"
+import { Mail, Calendar, Shield, LogOut, Edit } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 
 // DEFINE PROPS FOR OUR COMPONENT 🔄
@@ -32,10 +32,11 @@ export default function ProfileContent({
         title: "Signed out",
         description: "You have been successfully signed out.",
       })
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       toast({
         title: "Error signing out",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {

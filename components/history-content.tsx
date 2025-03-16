@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useSidebarStore } from "@/components/sidebar"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -8,7 +8,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { History, MessageSquare, Zap, Clock, Search, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
-import ReactMarkdown from "react-markdown"
 import DynamicLesson from "./dynamic-lesson"
 
 // DEFINE TYPES FOR HISTORY ITEMS 📋
@@ -31,10 +30,6 @@ interface HistoryResponse {
   }
 }
 
-interface HistoryContentProps {
-  onResetRef?: React.MutableRefObject<(() => void) | null>
-}
-
 // CUSTOM HOOK FOR DEBOUNCING INPUT VALUES ⏱️
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value)
@@ -54,11 +49,10 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue
 }
 
-export default function HistoryContent({ onResetRef }: HistoryContentProps = {}) {
+export default function HistoryContent() {
   const { isOpen } = useSidebarStore()
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -71,10 +65,9 @@ export default function HistoryContent({ onResetRef }: HistoryContentProps = {})
   const debouncedSearchQuery = useDebounce(searchQuery, 500)
 
   // FETCH HISTORY DATA FROM API 🔄
-  const fetchHistory = async (pageNum = 1, query = "") => {
+  const fetchHistory = useCallback(async (pageNum = 1, query = "") => {
     try {
       setLoading(true)
-      setError(null)
       
       // Add search query parameter if provided
       const queryParam = query ? `&query=${encodeURIComponent(query)}` : ""
@@ -111,7 +104,6 @@ export default function HistoryContent({ onResetRef }: HistoryContentProps = {})
       
     } catch (err) {
       console.error("❌ ERROR FETCHING HISTORY:", err)
-      setError(err instanceof Error ? err.message : "An unknown error occurred")
       
       toast({
         title: "Error Loading History",
@@ -121,7 +113,7 @@ export default function HistoryContent({ onResetRef }: HistoryContentProps = {})
     } finally {
       setLoading(false)
     }
-  }
+  }, [router, toast])
   
   // LOAD MORE HISTORY ITEMS 📚
   const loadMore = () => {
@@ -157,12 +149,6 @@ export default function HistoryContent({ onResetRef }: HistoryContentProps = {})
   // HANDLE SEARCH INPUT CHANGE 🔍
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
-  }
-  
-  // HANDLE SEARCH SUBMISSION 🔍
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    fetchHistory(1, searchQuery)
   }
   
   // CLEAR SEARCH QUERY 🧹
@@ -254,7 +240,7 @@ export default function HistoryContent({ onResetRef }: HistoryContentProps = {})
   // FETCH HISTORY ON COMPONENT MOUNT AND WHEN DEBOUNCED SEARCH QUERY CHANGES 🚀
   useEffect(() => {
     fetchHistory(1, debouncedSearchQuery)
-  }, [debouncedSearchQuery])
+  }, [debouncedSearchQuery, fetchHistory])
   
   // INITIAL FETCH ON MOUNT (REMOVE THE OLD ONE)
   useEffect(() => {
@@ -332,7 +318,7 @@ export default function HistoryContent({ onResetRef }: HistoryContentProps = {})
                   </h2>
                   {searchQuery && !loading && (
                     <div className="text-sm text-muted-foreground">
-                      {history.length} result{history.length !== 1 ? 's' : ''} for "{searchQuery}"
+                      {history.length} result{history.length !== 1 ? 's' : ''} for &quot;{searchQuery}&quot;
                     </div>
                   )}
                 </div>
@@ -427,14 +413,6 @@ export default function HistoryContent({ onResetRef }: HistoryContentProps = {})
                       <h3 className="text-lg font-semibold mb-2">Answer</h3>
                       <div className="p-3 bg-accent/20 rounded-lg prose-sm max-w-none">
                         <DynamicLesson 
-                          data={{
-                            content: [{
-                              type: 'text',
-                              content: selectedItem.answer
-                            }],
-                            combined_markdown: selectedItem.answer
-                          }}
-                          prompt={selectedItem.prompt}
                           answer={selectedItem.answer}
                         />
                       </div>

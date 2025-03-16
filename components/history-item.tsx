@@ -15,7 +15,6 @@ interface HistoryItemProps {
 }
 
 export default function HistoryItem({
-  id,
   prompt,
   mode,
   created_at,

@@ -1,11 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
 import HistoryItem from "@/components/history-item"
-import { History } from "lucide-react"
 import { usePathname } from "next/navigation"
 
 // DEFINE TYPES FOR HISTORY ITEMS 📋
@@ -46,7 +45,7 @@ export default function HistoryList({ onSelectQuestion, limit = 5, searchQuery =
   const isHistoryPage = pathname === '/history'
 
   // FETCH HISTORY DATA FROM API 🔄
-  const fetchHistory = async (pageNum = 1) => {
+  const fetchHistory = useCallback(async (pageNum = 1) => {
     try {
       setLoading(true)
       setError(null)
@@ -98,7 +97,7 @@ export default function HistoryList({ onSelectQuestion, limit = 5, searchQuery =
     } finally {
       setLoading(false)
     }
-  }
+  }, [searchQuery, limit, isHistoryPage, toast])
   
   // LOAD MORE HISTORY ITEMS 📚
   const loadMore = () => {
@@ -123,7 +122,7 @@ export default function HistoryList({ onSelectQuestion, limit = 5, searchQuery =
     }, 5 * 60 * 1000)
     
     return () => clearInterval(intervalId)
-  }, [searchQuery])
+  }, [searchQuery, fetchHistory])
   
   // LISTEN FOR RESET MAIN CONTENT EVENT TO CLEAR ACTIVE ITEM 🧹
   useEffect(() => {

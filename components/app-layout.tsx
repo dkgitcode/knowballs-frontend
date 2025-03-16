@@ -1,6 +1,6 @@
 "use client"
 import Sidebar from "@/components/sidebar"
-import { useRef, useEffect, cloneElement, isValidElement, Children } from "react"
+import { useRef, cloneElement, isValidElement, Children } from "react"
 
 // APP LAYOUT COMPONENT - WRAPS ALL PAGES WITH SIDEBAR 🌐
 export default function AppLayout({
@@ -17,7 +17,7 @@ export default function AppLayout({
     if (isValidElement(child)) {
       // Clone the element with the resetFunctionRef prop
       return cloneElement(child, { 
-        // @ts-ignore - Pass as onResetRef for content components
+        // @ts-expect-error - Pass as onResetRef for content components
         onResetRef: resetFunctionRef 
       });
     }
