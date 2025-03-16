@@ -441,8 +441,8 @@ export default function Sidebar({ onReset }: SidebarProps) {
               onClick={handleNewQuestion}
               className="flex flex-col items-center justify-center w-full h-full text-primary relative"
             >
-              <div className="absolute top-1 w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-md">
-                <Sparkles size={20} className="text-primary-foreground" />
+              <div className="absolute top-1 w-10 h-10 rounded-full flex items-center justify-center shadow-md">
+                <Sparkles size={20} className="text-primary" />
               </div>
               <span className="text-xs mt-8 font-medium">New</span>
             </button>
