@@ -41,7 +41,12 @@ export default function LoginContent({
 
   // RESET FUNCTION FOR SIDEBAR INTEGRATION 🔄
   const resetLogin = () => {
-    // Reset to default state if needed
+    // RESET ALL FORM STATES TO DEFAULT VALUES 🔄✨
+    setIsLoggingIn(false);
+    setIsSigningUp(false);
+    formSubmittedRef.current = false;
+    setHasRefreshed(false);
+    // Any other state that needs resetting can be added here
   }
 
   // EXPOSE RESET FUNCTION VIA REF FOR EXTERNAL COMPONENTS 🔄
@@ -69,11 +74,13 @@ export default function LoginContent({
   // CUSTOM FORM SUBMISSION HANDLERS WITH TRACKING 📝
   const handleLogin = async (formData: FormData) => {
     // Mark form as submitted
-    formSubmittedRef.current = true;
-    setHasRefreshed(false); // Reset refresh flag when submitting
+    
     
     // SET LOADING STATE FOR LOGIN BUTTON ⏳
     setIsLoggingIn(true);
+
+    formSubmittedRef.current = true;
+    setHasRefreshed(false); // Reset refresh flag when submitting
     
     try {
       // Call the server action
