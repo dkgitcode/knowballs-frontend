@@ -22,13 +22,17 @@ export async function POST(request: NextRequest) {
     // Extract parameters from the URL query parameters
     const { searchParams } = new URL(request.url);
     const mode = searchParams.get('mode') || 'answer';
-    const env = searchParams.get('env') || 'dev'; // Default to dev environment
+    // const env = searchParams.get('env') || 'dev'; // Default to dev environment
+    // check if we are in production
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    const env = isProduction ? 'prod' : 'dev';
     
     // Get the request body
     const body = await request.json();
     
     // Determine which API endpoint to use
-    const apiUrl = env === 'prod' ? API_ENDPOINTS.prod : API_ENDPOINTS.dev;
+    const apiUrl = isProduction ? API_ENDPOINTS.prod : API_ENDPOINTS.dev;
     
     // FORWARD THE REQUEST TO THE APPROPRIATE API 🚀
     console.log(`🔄 Forwarding request to ${env} environment: ${apiUrl}`);

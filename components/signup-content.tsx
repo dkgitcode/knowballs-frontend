@@ -51,23 +51,22 @@ export default function SignupContent({
     setIsSigningUp(true)
     
     try {
-      // Submit the form to the server action
-      const form = document.createElement('form')
-      form.method = 'POST'
-      form.action = '/api/auth/signup'
+      // Use fetch instead of form submission to avoid 405 errors
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        body: formData,
+        redirect: 'follow'
+      })
       
-      const emailInput = document.createElement('input')
-      emailInput.name = 'email'
-      emailInput.value = email
-      form.appendChild(emailInput)
-      
-      const passwordInput = document.createElement('input')
-      passwordInput.name = 'password'
-      passwordInput.value = password
-      form.appendChild(passwordInput)
-      
-      document.body.appendChild(form)
-      form.submit()
+      // Check if the response is a redirect
+      if (response.redirected) {
+        // Navigate to the redirect URL
+        window.location.href = response.url
+      } else if (!response.ok) {
+        // Handle error response
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Signup failed')
+      }
     } catch (error) {
       console.error('Signup error:', error)
       // RESET LOADING STATE ON ERROR ❌
