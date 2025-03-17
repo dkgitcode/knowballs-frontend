@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // API ENDPOINT CONFIGURATION 🌐
 const API_ENDPOINTS = {
   dev: 'http://localhost:8000/api/query',
-  prod: process.env.PROD_API_URL || 'https://api.production-server.com/api/query'
+  prod: process.env.PROD_API_URL || 'https://knowballs-backend-4808b557c795.herokuapp.com/api/query'
 };
 
 export async function POST(request: NextRequest) {
