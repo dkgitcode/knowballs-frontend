@@ -45,6 +45,21 @@ export default function MainContent({
   // GET SIDEBAR STATE FROM ZUSTAND STORE 🔄
   const { isOpen } = useSidebarStore()
 
+  // DETERMINE IF WE'RE IN PRODUCTION OR DEVELOPMENT 🌎
+  const isProduction = process.env.NODE_ENV === 'production'
+  // USE PRODUCTION API URL WHEN IN PRODUCTION, OTHERWISE USE THE PROVIDED apiBaseUrl
+  // PRODUCTION: Uses Heroku backend API
+  // DEVELOPMENT: Uses local API specified by apiBaseUrl prop (defaults to localhost:8000)
+  const effectiveApiUrl = isProduction 
+    ? "https://knowballs-backend-4808b557c795.herokuapp.com" 
+    : apiBaseUrl
+
+  // Log the environment and API URL on component mount
+  useEffect(() => {
+    console.log(`🌍 ENVIRONMENT: ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}`);
+    console.log(`🔌 USING API URL: ${effectiveApiUrl}`);
+  }, [isProduction, effectiveApiUrl]);
+
   // Create a ref to store the fetch controller for cancellation
   const controllerRef = useRef<AbortController | null>(null);
 
@@ -53,6 +68,8 @@ export default function MainContent({
     if (!prompt.trim()) return;
 
     // FIRST CHECK AUTHENTICATION BEFORE STARTING ANY ANIMATIONS OR LOADING STATES ✅
+    // IMPORTANT: Even though we're calling the API directly, we still need to check auth
+    // to ensure the user is logged in before making the request
     try {
       // Quick authentication check before proceeding
       const isAuthenticated = await checkAuthentication();
@@ -89,12 +106,15 @@ export default function MainContent({
       // MAKE API CALL TO FETCH LESSON DATA 🚀
       console.log(`🚀 FETCHING ${mode.toUpperCase()} DATA with prompt:`, prompt);
 
-      // USE SECURE INTERNAL API PROXY INSTEAD OF DIRECT EXTERNAL API CALL 🔒
-      // This ensures authentication is validated before the request reaches the external API
-      const response = await fetch(`/api/proxy?mode=${mode}`, {
+      // CALL THE API DIRECTLY INSTEAD OF USING THE PROXY 🔥
+      // We've already checked authentication above, so we can safely call the API directly
+      console.log(`🌐 CALLING API DIRECTLY at ${effectiveApiUrl}/api/query?mode=${mode}`);
+      const response = await fetch(`${effectiveApiUrl}/api/query?mode=${mode}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // Include any necessary auth headers if your API requires them
+          // 'Authorization': 'Bearer your-token-here', // Uncomment if needed
         },
         body: JSON.stringify({ query: prompt }),
         signal: controllerRef.current.signal
@@ -424,7 +444,7 @@ export default function MainContent({
               <div className="w-full max-w-3xl mx-auto space-y-4 content-area">
                 <h2 className="text-2xl font-bold text-red-500">Error Loading Lesson</h2>
                 <p className="text-muted-foreground">{error}</p>
-                <p className="text-sm">Please check that your local API is running at {apiBaseUrl}</p>
+                <p className="text-sm">Please check that your API is running at {effectiveApiUrl}</p>
                 <button
                   onClick={() => handleSearch(userPrompt, currentMode)}
                   className="px-4 py-2 bg-primary text-primary-foreground rounded-md"

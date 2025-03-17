@@ -24,7 +24,8 @@ export async function POST(request: NextRequest) {
     const mode = searchParams.get('mode') || 'answer';
     // const env = searchParams.get('env') || 'dev'; // Default to dev environment
     // check if we are in production
-    const isProduction = process.env.NODE_ENV === 'production';
+    // const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction = true;
 
     const env = isProduction ? 'prod' : 'dev';
     
