@@ -262,7 +262,7 @@ export default function Sidebar({ onReset }: SidebarProps) {
       icon: <History size={20} />,
       label: 'History',
       action: () => {
-        router.push('/history');
+        // router.push('/history');
       }
     }] : []),
   ]
