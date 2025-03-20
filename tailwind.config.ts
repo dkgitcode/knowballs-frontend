@@ -61,6 +61,7 @@ export default {
         'slide-to-top': 'slideToTop 0.6s ease-in-out forwards',
         'slide-up-in': 'slideUpIn 0.5s ease-in-out forwards',
         'slide-up-out': 'slideUpOut 0.5s ease-in-out forwards',
+        'score-flicker': 'scoreFlicker 1.2s ease-in-out',
       },
       keyframes: {
         fadeIn: {
@@ -78,6 +79,18 @@ export default {
         slideUpOut: {
           '0%': { transform: 'translateY(0)', opacity: '1' },
           '100%': { transform: 'translateY(-10px)', opacity: '0' },
+        },
+        scoreFlicker: {
+          '0%, 100%': { opacity: '1', transform: 'scale(1)' },
+          '10%': { opacity: '0.9', transform: 'scale(1.1)' },
+          '20%': { opacity: '0.7', transform: 'scale(1.2)' },
+          '30%': { opacity: '0.9', transform: 'scale(1.1)' },
+          '40%': { opacity: '1', transform: 'scale(1)' },
+          '50%': { opacity: '0.9', transform: 'scale(1.1)' },
+          '60%': { opacity: '0.7', transform: 'scale(1.2)' },
+          '70%': { opacity: '0.9', transform: 'scale(1.1)' },
+          '80%': { opacity: '1', transform: 'scale(1)' },
+          '90%': { opacity: '0.9', transform: 'scale(1.05)' },
         },
       },
   	}

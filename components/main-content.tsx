@@ -5,6 +5,8 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import SampleInput from "@/components/sample-input"
 import DynamicLesson from "@/components/dynamic-lesson"
 import { useToast } from "@/hooks/use-toast"
+import BasketballClipper from "@/components/basketball-clipper"
+
 // Define the types for our lesson data
 interface ContentItem {
   type: string;
@@ -18,13 +20,39 @@ interface LessonData {
   combined_markdown?: string;
 }
 
-// DEFINE PROPS FOR OUR COMPONENT 🔄
-interface MainContentProps {
-  title?: string; // Optional title override
-  apiBaseUrl?: string; // Allow customizing the API URL
-  initialMode?: 'answer' | 'visualizer'; // Initial mode
-  onResetRef?: React.MutableRefObject<(() => void) | null>; // Reference to reset function
+// Define interface for basketball clipper data to match BasketballClipper props
+interface ClipperData {
+  query: string;
+  parameters: Record<string, any>;
+  results: any[]; // Array of BasketballPlay objects
+  message: string;
 }
+
+// Define valid mode types to use throughout component
+type AppMode = 'answer' | 'visualizer' | 'clipper';
+
+// LOCAL STORAGE KEY FOR MODE CACHING 🔑
+const MODE_STORAGE_KEY = 'knowballs_last_mode';
+
+interface MainContentProps {
+  title?: string;
+  apiBaseUrl?: string;
+  initialMode?: AppMode;
+  onResetRef?: React.MutableRefObject<(() => void) | null>;
+}
+
+// Placeholder components for Visualizer and Clipper modes
+const VisualizerPlaceholder = ({ data }: { data: any }) => (
+  <div className="w-full animate-fade-in opacity-0">
+    <div className="p-4 border border-yellow-400 rounded-lg">
+      <h2 className="text-xl font-bold mb-2">Visualizer Component</h2>
+      <p>This component will be built later. Data available:</p>
+      <pre className="bg-accent/10 p-2 rounded mt-2 overflow-auto max-h-[300px]">
+        {JSON.stringify(data, null, 2)}
+      </pre>
+    </div>
+  </div>
+);
 
 export default function MainContent({
   title = "Ask me anything...",
@@ -37,58 +65,57 @@ export default function MainContent({
   const [showData, setShowData] = useState(false)
   const [answer, setAnswer] = useState("")
   const [userPrompt, setUserPrompt] = useState("")
-  const [data, setData] = useState<LessonData | null>(null)
+  const [data, setData] = useState<LessonData | ClipperData | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // Add state for current mode
-  const [currentMode, setCurrentMode] = useState<'answer' | 'visualizer'>(initialMode)
+  // Get mode from localStorage if available, otherwise use initialMode
+  const [currentMode, setCurrentMode] = useState<AppMode>(() => {
+    // RETRIEVE CACHED MODE FROM LOCALSTORAGE IF AVAILABLE 💾
+    if (typeof window !== 'undefined') {
+      const savedMode = localStorage.getItem(MODE_STORAGE_KEY) as AppMode | null;
+      return savedMode || initialMode;
+    }
+    return initialMode;
+  })
   const { toast } = useToast()
-  // GET SIDEBAR STATE FROM ZUSTAND STORE 🔄
   const { isOpen } = useSidebarStore()
 
-  // DETERMINE IF WE'RE IN PRODUCTION OR DEVELOPMENT 🌎
   const isProduction = process.env.NODE_ENV === 'production'
-  // USE PRODUCTION API URL WHEN IN PRODUCTION, OTHERWISE USE THE PROVIDED apiBaseUrl
-  // PRODUCTION: Uses Heroku backend API
-  // DEVELOPMENT: Uses local API specified by apiBaseUrl prop (defaults to localhost:8000)
   const effectiveApiUrl = isProduction 
     ? "https://knowballs-backend-4808b557c795.herokuapp.com" 
     : apiBaseUrl
 
-  // Log the environment and API URL on component mount
-  useEffect(() => {
-    console.log(`🌍 ENVIRONMENT: ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}`);
-    console.log(`🔌 USING API URL: ${effectiveApiUrl}`);
-  }, [isProduction, effectiveApiUrl]);
-
   // Create a ref to store the fetch controller for cancellation
   const controllerRef = useRef<AbortController | null>(null);
 
-  // HANDLE USER SEARCH INPUT 🔍
-  const handleSearch = async (prompt: string, mode: 'answer' | 'visualizer' = 'answer') => {
+  const handleSearch = async (prompt: string, mode: AppMode = 'answer') => {
     if (!prompt.trim()) return;
 
-    // FIRST CHECK AUTHENTICATION BEFORE STARTING ANY ANIMATIONS OR LOADING STATES ✅
-    // IMPORTANT: Even though we're calling the API directly, we still need to check auth
-    // to ensure the user is logged in before making the request
     try {
-      // Quick authentication check before proceeding
-      const isAuthenticated = await checkAuthentication();
-      if (!isAuthenticated) {
-        // Show toast but don't start any animations or loading states
-        toast({
-          title: "Authentication Required",
-          description: "You must be logged in to use this feature.",
-          variant: "destructive"
-        });
-        return; // Exit early - don't proceed with search
+      // Authentication check - ONLY FOR NON-CLIPPER MODES 🔐
+      if (mode !== 'clipper') {
+        const isAuthenticated = await checkAuthentication();
+        if (!isAuthenticated) {
+          toast({
+            title: "Authentication Required",
+            description: "You must be logged in to use this feature.",
+            variant: "destructive"
+          });
+          return;
+        }
       }
       
-      // Only set loading states AFTER confirming authentication
+      // Setup states
       setUserPrompt(prompt);
       setIsLoading(true);
       setIsRemoved(true);
       setError(null);
       setCurrentMode(mode);
+      
+      // SAVE MODE TO LOCALSTORAGE WHEN SEARCHING 💾
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(MODE_STORAGE_KEY, mode);
+        console.log("Mode saved to localStorage during search:", mode);
+      }
       
       // Reset previous data
       setData(null);
@@ -103,118 +130,105 @@ export default function MainContent({
       // Create a new controller for this fetch
       controllerRef.current = new AbortController();
 
-      // MAKE API CALL TO FETCH LESSON DATA 🚀
-      console.log(`🚀 FETCHING ${mode.toUpperCase()} DATA with prompt:`, prompt);
+      console.log(`Fetching ${mode.toUpperCase()} data with prompt:`, prompt);
 
-      // CALL THE API DIRECTLY INSTEAD OF USING THE PROXY 🔥
-      // We've already checked authentication above, so we can safely call the API directly
-      console.log(`🌐 CALLING API DIRECTLY at ${effectiveApiUrl}/api/query?mode=${mode}`);
-      const response = await fetch(`${effectiveApiUrl}/api/query?mode=${mode}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Include any necessary auth headers if your API requires them
-          // 'Authorization': 'Bearer your-token-here', // Uncomment if needed
-        },
-        body: JSON.stringify({ query: prompt }),
-        signal: controllerRef.current.signal
-      });
+      let response;
+      // Different API endpoints based on mode
+      if (mode === 'clipper') {
+        response = await fetch(`${effectiveApiUrl}/api/find-plays`, {
+          method: 'POST',
+          body: JSON.stringify({ query: prompt }),
+          signal: controllerRef.current.signal
+        });
+      } else {
+        // Both 'answer' and 'visualizer' modes use the same endpoint
+        response = await fetch(`${effectiveApiUrl}/api/query?mode=${mode}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query: prompt }),
+          signal: controllerRef.current.signal
+        });
+      }
 
       if (!response.ok) {
-        // Handle other non-auth errors (since auth is already checked)
         throw new Error(`API request failed with status ${response.status}`);
       }
 
-      // PARSE THE RESPONSE CAREFULLY 🧐
       const json_data = await response.json();
-      console.log(`🔍 FULL ${mode.toUpperCase()} API RESPONSE:`, json_data);
+      console.log(`Response from ${mode.toUpperCase()} API:`, json_data);
       
-      // Extract data with safety checks
-      const tool_used = json_data.tool_used || 'unknown';
-      console.log(`Used tool: ${tool_used}`);
-      
-      // SAFELY EXTRACT DATA WITH DETAILED LOGGING 📊
       let extractedData = null;
       let extractedAnswer = "";
-      
-      if (json_data.tool_result && json_data.tool_result.data) {
-        extractedData = json_data.tool_result.data;
-        console.log("✅ EXTRACTED DATA:", extractedData);
+
+      // Process the response based on mode
+      if (mode === 'clipper') {
+        // For clipper mode, use the raw data and ensure it has the correct structure
+        // IMPORTANT: Clipper mode expects specific data format 🏀
+        extractedData = {
+          query: prompt,
+          parameters: json_data.parameters || {},
+          results: json_data.results || [],
+          message: json_data.message || ""
+        };
       } else {
-        console.warn("⚠️ NO DATA FOUND IN TOOL RESULT");
-        // Create a minimal valid data structure
-        extractedData = { content: [] };
+        // For answer and visualizer modes
+        if (json_data.tool_result && json_data.tool_result.data) {
+          extractedData = json_data.tool_result.data;
+        } else {
+          extractedData = { content: [] };
+        }
+        
+        if (!extractedData.content) {
+          extractedData.content = [];
+        }
+        
+        if (json_data.answer) {
+          extractedAnswer = json_data.answer;
+        } else {
+          extractedAnswer = "Sorry, I couldn't generate an answer for your query.";
+        }
       }
-      
-      // ENSURE DATA HAS THE CORRECT STRUCTURE 🧩
-      if (!extractedData.content) {
-        console.warn("⚠️ DATA MISSING CONTENT ARRAY, ADDING EMPTY CONTENT ARRAY");
-        extractedData.content = [];
-      }
-      
-      if (json_data.answer) {
-        extractedAnswer = json_data.answer;
-        console.log("✅ EXTRACTED ANSWER:", extractedAnswer.substring(0, 100) + "...");
-      } else {
-        console.warn("⚠️ NO ANSWER FOUND IN RESPONSE");
-        extractedAnswer = "Sorry, I couldn't generate an answer for your query.";
-      }
-      
-      // DEBUG LOGS TO CHECK DATA BEFORE SETTING STATE 🔍
-      console.log("📊 DATA BEFORE STATE UPDATE:", {
-        mode,
-        data: extractedData,
-        answer: extractedAnswer,
-        isDataValid: !!extractedData,
-        answerLength: extractedAnswer ? extractedAnswer.length : 0
-      });
       
       // Update state with extracted data
       setAnswer(extractedAnswer);
       setData(extractedData);
       
-      // IMPORTANT: Set showData to true AFTER setting the data and answer
+      // Show data after a short delay
       setTimeout(() => {
         setShowData(true);
-        console.log("🔄 STATE AFTER UPDATE WITH TIMEOUT:", {
-          mode,
-          showData: true,
-          dataExists: !!extractedData,
-          errorExists: !!error
-        });
       }, 100);
       
-      // SAVE QUESTION AND ANSWER TO DATABASE 💾
-      if (extractedAnswer) {
-        try {
-          console.log("📝 SAVING QUESTION AND ANSWER TO DATABASE...");
-          const saveResponse = await fetch('/api/history/save', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              prompt: prompt,
-              answer: extractedAnswer,
-              mode: mode
-            })
-          });
-          
-          if (!saveResponse.ok) {
-            console.warn("⚠️ FAILED TO SAVE QUESTION HISTORY:", await saveResponse.text());
-          } else {
-            console.log("✅ QUESTION HISTORY SAVED SUCCESSFULLY");
-          }
-        } catch (saveError) {
-          // Don't let saving errors affect the main functionality
-          console.error("❌ ERROR SAVING QUESTION HISTORY:", saveError);
+      // Save to history
+      try {
+        // For clipper mode, store the JSON stringified data for later restoration
+        const historyData = mode === 'clipper' 
+          ? JSON.stringify(extractedData)
+          : extractedAnswer;
+        
+        const saveResponse = await fetch('/api/history/save', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt: prompt,
+            answer: historyData,
+            mode: mode
+          })
+        });
+        
+        if (!saveResponse.ok) {
+          console.warn("Failed to save question history:", await saveResponse.text());
         }
+      } catch (saveError) {
+        console.error("Error saving question history:", saveError);
       }
       
     } catch (err) {
-      // Only log errors that aren't from aborting the request
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
-        console.error(`❌ ERROR FETCHING ${mode.toUpperCase()} DATA:`, err);
+        console.error(`Error fetching ${mode.toUpperCase()} data:`, err);
         setError(err instanceof Error ? err.message : 'An unknown error occurred');
       }
     } finally {
@@ -222,27 +236,19 @@ export default function MainContent({
     }
   }
 
-  // CHECK AUTHENTICATION STATUS BEFORE PROCEEDING WITH SEARCH 🔐
   const checkAuthentication = async (): Promise<boolean> => {
     try {
-      // IMPLEMENT SIMPLE CACHING TO PREVENT MULTIPLE CALLS IN QUICK SUCCESSION ⚡
-      // Check if we have a recent auth check result in memory
+      // Simple caching for auth checks
       const AUTH_CACHE_KEY = 'auth_check_result';
       const AUTH_CACHE_EXPIRY_KEY = 'auth_check_expiry';
       
-      // Check if we have a cached result that's still valid
       const cachedResult = sessionStorage.getItem(AUTH_CACHE_KEY);
       const cacheExpiry = sessionStorage.getItem(AUTH_CACHE_EXPIRY_KEY);
       
       if (cachedResult && cacheExpiry && Date.now() < parseInt(cacheExpiry)) {
-        console.log("🔄 Using cached auth check result (valid for " + 
-          Math.round((parseInt(cacheExpiry) - Date.now()) / 1000) + " more seconds)");
         return cachedResult === 'true';
       }
       
-      console.log("🔍 PERFORMING NEW AUTH CHECK - cache expired or not found");
-      
-      // Make a lightweight request to check auth status
       const response = await fetch('/api/auth/check', {
         method: 'GET',
         headers: {
@@ -250,70 +256,73 @@ export default function MainContent({
         },
       });
       
-      // If we get a 401, user is not authenticated
       const isAuthenticated = response.status !== 401;
       
-      // CACHE THE RESULT FOR 30 SECONDS TO PREVENT MULTIPLE CALLS 🕒
       try {
         sessionStorage.setItem(AUTH_CACHE_KEY, isAuthenticated.toString());
-        sessionStorage.setItem(AUTH_CACHE_EXPIRY_KEY, (Date.now() + 30000).toString()); // 30 second cache
-        console.log("✅ Auth check result cached for 30 seconds");
+        sessionStorage.setItem(AUTH_CACHE_EXPIRY_KEY, (Date.now() + 30000).toString());
       } catch (cacheError) {
         console.warn("Could not cache auth result:", cacheError);
       }
       
-      // Any non-200 response that's not 401 is treated as an error but not necessarily auth-related
       if (!response.ok && response.status !== 401) {
         console.error(`Auth check failed with status ${response.status}`);
-        // We'll assume auth is OK and let the main request handle any other errors
         return true;
       }
       
       return isAuthenticated;
     } catch (err) {
-      console.error("❌ ERROR CHECKING AUTHENTICATION:", err);
-      // On error, we'll assume auth is OK and let the main request handle any issues
+      console.error("Error checking authentication:", err);
       return true;
     }
   }
 
-  // LOAD QUESTION FROM HISTORY 📚
-  const loadQuestionFromHistory = (prompt: string, answer: string, mode: 'answer' | 'visualizer' = 'answer') => {
-    // Set the user prompt
+  const loadQuestionFromHistory = (prompt: string, answer: string, mode: AppMode = 'answer') => {
     setUserPrompt(prompt)
-    
-    // Set the mode
     setCurrentMode(mode)
-    
-    // Reset previous data
     setData(null)
     setError(null)
-    
-    // Show the question at the top
     setIsRemoved(true)
-    
-    // Set the answer
     setAnswer(answer)
     
-    // Create a minimal valid data structure if we don't have content
-    const extractedData: LessonData = { 
-      content: [],
-      combined_markdown: answer
+    // SAVE MODE TO LOCALSTORAGE WHEN LOADING HISTORY 📚
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(MODE_STORAGE_KEY, mode);
+      console.log("Mode saved to localStorage from history:", mode);
     }
     
-    // Set the data
-    setData(extractedData)
+    if (mode === 'clipper') {
+      // For clipper mode, try to parse the answer as JSON
+      try {
+        // IMPORTANT: For clipper history, we should store the JSON data 📊
+        const clipperData = JSON.parse(answer);
+        setData(clipperData);
+      } catch (e) {
+        // Fallback if answer is not valid JSON
+        setData({
+          query: prompt,
+          parameters: {},
+          results: [],
+          message: "Could not load history data correctly"
+        });
+      }
+    } else {
+      // For other modes, use the answer as markdown
+      const extractedData: LessonData = { 
+        content: [],
+        combined_markdown: answer
+      }
+      
+      setData(extractedData)
+    }
     
-    // Show the data
     setTimeout(() => {
       setShowData(true)
     }, 100)
     
-    // Log that we loaded from history
-    console.log("📚 LOADED QUESTION FROM HISTORY:", { prompt, mode })
+    console.log("Loaded question from history:", { prompt, mode })
   }
 
-  // DEFINE RESET CHAT FUNCTION BEFORE USING IT IN USEEFFECT 🧹
   const resetChat = useCallback(() => {
     setIsLoading(false)
     setIsRemoved(false)
@@ -321,37 +330,45 @@ export default function MainContent({
     setUserPrompt("")
     setData(null)
     setError(null)
-    setCurrentMode(initialMode)
+    // KEEP CURRENT MODE WHEN RESETTING - DON'T REVERT TO INITIAL MODE 🔄
+    // We no longer reset to initialMode here
 
-    // Cancel any in-progress fetches
     if (controllerRef.current) {
       controllerRef.current.abort();
     }
-  }, [initialMode]);
+  }, []); // Remove initialMode from dependency array since we don't use it anymore
 
-  // LISTEN FOR HISTORY QUESTION EVENTS 👂
   useEffect(() => {
-    const handleHistoryQuestion = (event: CustomEvent<{prompt: string; answer: string; mode: 'answer' | 'visualizer'}>) => {
+    const handleHistoryQuestion = (event: CustomEvent<{prompt: string; answer: string; mode: AppMode}>) => {
       const { prompt, answer, mode } = event.detail
       loadQuestionFromHistory(prompt, answer, mode)
     }
     
-    // LISTEN FOR RESET MAIN CONTENT EVENT 🧹
     const handleResetMainContent = () => {
-      console.log("🔄 RESETTING MAIN CONTENT STATE");
+      console.log("Resetting main content state");
       resetChat();
     }
     
-    // Add event listeners
-    window.addEventListener('loadHistoryQuestion', handleHistoryQuestion)
+    window.addEventListener('loadHistoryQuestion', handleHistoryQuestion as EventListener)
     window.addEventListener('resetMainContent', handleResetMainContent)
     
-    // Cleanup
     return () => {
-      window.removeEventListener('loadHistoryQuestion', handleHistoryQuestion)
+      window.removeEventListener('loadHistoryQuestion', handleHistoryQuestion as EventListener)
       window.removeEventListener('resetMainContent', handleResetMainContent)
     }
-  }, [resetChat]) // NOW resetChat IS DEFINED BEFORE BEING USED HERE ✅
+  }, [resetChat])
+
+  useEffect(() => {
+    if (onResetRef) {
+      onResetRef.current = resetChat;
+    }
+    
+    return () => {
+      if (onResetRef) {
+        onResetRef.current = null;
+      }
+    };
+  }, [onResetRef, resetChat]);
 
   const LoadingSkeleton = ({ delay }: { delay: number }) => (
     <div
@@ -362,28 +379,48 @@ export default function MainContent({
     </div>
   )
 
-  // ADD A TRANSITION EFFECT BETWEEN LOADING AND CONTENT 🔄
   const transitionToContent = () => {
-    // This function helps create a smooth transition between loading and content
     if (isLoading && data) {
       return "animate-slide-up-out";
     }
     return "";
   }
 
-  // EXPOSE RESET FUNCTION VIA REF FOR EXTERNAL COMPONENTS 🔄
-  useEffect(() => {
-    if (onResetRef) {
-      onResetRef.current = resetChat;
-    }
+  // Render the appropriate component based on the current mode
+  const renderContent = () => {
+    if (!showData || !data) return null;
     
-    // CLEANUP FUNCTION TO REMOVE REFERENCE WHEN COMPONENT UNMOUNTS 🧹
-    return () => {
-      if (onResetRef) {
-        onResetRef.current = null;
-      }
-    };
-  }, [onResetRef, resetChat]); // Include resetChat in dependencies
+    switch(currentMode) {
+      case 'answer':
+        return (
+          <div className="flex-1 flex items-start justify-start w-full animate-fade-in opacity-0">
+            <div className="w-full content-area">
+              <DynamicLesson answer={answer} />
+            </div>
+          </div>
+        );
+      case 'visualizer':
+        return <VisualizerPlaceholder data={data} />;
+      case 'clipper':
+        // Check if data has the clipper data structure
+        if ('query' in data && 'results' in data) {
+          return <BasketballClipper data={data as ClipperData} />;
+        }
+        return <div className="p-4 border border-red-500 rounded-lg">Invalid data format for Clipper mode</div>;
+      default:
+        return null;
+    }
+  };
+
+  // Handle mode change from search input
+  const handleModeChange = (newMode: AppMode) => {
+    setCurrentMode(newMode);
+    // SAVE MODE TO LOCALSTORAGE WHEN CHANGED 💾
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(MODE_STORAGE_KEY, newMode);
+      console.log("Mode changed and saved to localStorage:", newMode);
+    }
+  }
 
   return (
     <div 
@@ -391,31 +428,33 @@ export default function MainContent({
         isOpen ? 'md:ml-60' : 'ml-0'
       } min-h-screen justify-center bg-[hsl(var(--background))] p-2 pl-2 pr-2`}
     >
-      {/* CONTENT CONTAINER WITH ROUNDED CORNERS AND BORDER INSTEAD OF TRIM ✨ */}
       <div className="w-full h-[calc(100vh-1.25rem)] flex flex-col relative overflow-hidden content-container border border-border">
-        {/* SCROLLABLE CONTENT AREA 📜 */}
         <div className={`flex-1 overflow-y-auto custom-scrollbar px-8 py-8 flex ${
           isRemoved ? 'items-start' : 'items-center'
         } transition-all duration-500 ease-in-out`}>
           <div className={`w-full max-w-3xl mx-auto flex-1 flex flex-col ${
             isRemoved ? 'justify-start pt-4' : 'justify-center'
           } transition-all duration-500 ease-in-out ${isRemoved ? 'animate-slide-to-top' : ''}`}>
-            {/* INITIAL SEARCH SECTION 🔎 */}
             {!isRemoved && (
               <div className={`space-y-8 w-full ${isLoading ? 'opacity-0 transition-opacity duration-300' : ''}`}>
                 <h1 className="text-4xl text-left mx-auto">
                   {title}
                 </h1>
-                <SearchInput onSearch={handleSearch} />
-                <SampleInput onSelect={(question) => {
-                  // Handle the selected sample question
-                  console.log(question);
-                  handleSearch(question, 'answer');
-                }} />
+
+                <SearchInput 
+                  onSearch={handleSearch} 
+                  onModeChange={handleModeChange} 
+                  initialMode={currentMode}
+                />
+                <SampleInput 
+                  onSelect={(question) => {
+                    handleSearch(question, currentMode);
+                  }} 
+                  mode={currentMode}
+                />
               </div>
             )}
 
-            {/* Display prompt at top when loading or showing data */}
             {isRemoved && userPrompt && (
               <div className="w-full animate-slide-up-in opacity-0 mb-4" style={{ animationDelay: "0.1s" }}>
                 <div className="flex items-center justify-between">
@@ -424,13 +463,10 @@ export default function MainContent({
               </div>
             )}
             
-            {/* 100px of space */}
             <div className="h-2"></div>
 
-            {/* Loading Skeletons */}
             {isLoading && !showData && (
               <div className={`space-y-6 w-full ${transitionToContent()}`}>
-                {/* Content Skeletons */}
                 <div className="space-y-4">
                   <LoadingSkeleton delay={0.3} />
                   <LoadingSkeleton delay={0.4} />
@@ -439,10 +475,9 @@ export default function MainContent({
               </div>
             )}
 
-            {/* Error Message */}
             {error && (
               <div className="w-full max-w-3xl mx-auto space-y-4 content-area">
-                <h2 className="text-2xl font-bold text-red-500">Error Loading Lesson</h2>
+                <h2 className="text-2xl font-bold text-red-500">Error Loading Data</h2>
                 <p className="text-muted-foreground">{error}</p>
                 <p className="text-sm">Please check that your API is running at {effectiveApiUrl}</p>
                 <button
@@ -454,20 +489,12 @@ export default function MainContent({
               </div>
             )}
 
-            {/* DYNAMIC LESSON SECTION - FADES IN WHEN DATA IS LOADED ✨ */}
-            {/* SHOULD RENDER WHEN: showData && data && !error */}
-            {showData && data && !error && (
-              <div className="flex-1 flex items-start justify-start w-full animate-fade-in opacity-0">
-                <div className="w-full content-area">
-                  <DynamicLesson answer={answer} />
-                </div>
-              </div>
-            )}
+            {/* Use the renderContent function to display the appropriate component */}
+            {renderContent()}
           </div>
         </div>
       </div>
 
-      {/* BOTTOM PADDING FOR MOBILE NAV BAR 📱 */}
       <div className="h-16 md:h-0 block md:hidden"></div>
     </div>
   )
