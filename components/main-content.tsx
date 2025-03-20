@@ -21,6 +21,7 @@ interface LessonData {
 }
 
 // Define interface for basketball clipper data to match BasketballClipper props
+// NOTE: This is used for the 'film' mode, but keeps the ClipperData name for compatibility
 interface ClipperData {
   query: string;
   parameters: Record<string, any>;
@@ -29,7 +30,7 @@ interface ClipperData {
 }
 
 // Define valid mode types to use throughout component
-type AppMode = 'answer' | 'visualizer' | 'clipper';
+type AppMode = 'answer' | 'visualizer' | 'film';
 
 // LOCAL STORAGE KEY FOR MODE CACHING 🔑
 const MODE_STORAGE_KEY = 'knowballs_last_mode';
@@ -41,7 +42,7 @@ interface MainContentProps {
   onResetRef?: React.MutableRefObject<(() => void) | null>;
 }
 
-// Placeholder components for Visualizer and Clipper modes
+// Placeholder components for Visualizer and Film modes
 const VisualizerPlaceholder = ({ data }: { data: any }) => (
   <div className="w-full animate-fade-in opacity-0">
     <div className="p-4 border border-yellow-400 rounded-lg">
@@ -57,7 +58,7 @@ const VisualizerPlaceholder = ({ data }: { data: any }) => (
 export default function MainContent({
   title = "Ask me anything...",
   apiBaseUrl = "http://localhost:8000",
-  initialMode = 'answer',
+  initialMode = 'film',
   onResetRef
 }: MainContentProps) {
   const [isLoading, setIsLoading] = useState(false)
@@ -87,12 +88,12 @@ export default function MainContent({
   // Create a ref to store the fetch controller for cancellation
   const controllerRef = useRef<AbortController | null>(null);
 
-  const handleSearch = async (prompt: string, mode: AppMode = 'answer') => {
+  const handleSearch = async (prompt: string, mode: AppMode = 'film') => {
     if (!prompt.trim()) return;
 
     try {
-      // Authentication check - ONLY FOR NON-CLIPPER MODES 🔐
-      if (mode !== 'clipper') {
+      // Authentication check - ONLY FOR NON-FILM MODES 🔐
+      if (mode !== 'film') {
         const isAuthenticated = await checkAuthentication();
         if (!isAuthenticated) {
           toast({
@@ -134,7 +135,7 @@ export default function MainContent({
 
       let response;
       // Different API endpoints based on mode
-      if (mode === 'clipper') {
+      if (mode === 'film') {
         response = await fetch(`${effectiveApiUrl}/api/find-plays`, {
           method: 'POST',
           body: JSON.stringify({ query: prompt }),
@@ -163,9 +164,9 @@ export default function MainContent({
       let extractedAnswer = "";
 
       // Process the response based on mode
-      if (mode === 'clipper') {
-        // For clipper mode, use the raw data and ensure it has the correct structure
-        // IMPORTANT: Clipper mode expects specific data format 🏀
+      if (mode === 'film') {
+        // For film mode, use the raw data and ensure it has the correct structure
+        // IMPORTANT: Film mode expects specific data format 🏀
         extractedData = {
           query: prompt,
           parameters: json_data.parameters || {},
@@ -202,8 +203,8 @@ export default function MainContent({
       
       // Save to history
       try {
-        // For clipper mode, store the JSON stringified data for later restoration
-        const historyData = mode === 'clipper' 
+        // For film mode, store the JSON stringified data for later restoration
+        const historyData = mode === 'film' 
           ? JSON.stringify(extractedData)
           : extractedAnswer;
         
@@ -291,10 +292,10 @@ export default function MainContent({
       console.log("Mode saved to localStorage from history:", mode);
     }
     
-    if (mode === 'clipper') {
-      // For clipper mode, try to parse the answer as JSON
+    if (mode === 'film') {
+      // For film mode, try to parse the answer as JSON
       try {
-        // IMPORTANT: For clipper history, we should store the JSON data 📊
+        // IMPORTANT: For film history, we should store the JSON data 📊
         const clipperData = JSON.parse(answer);
         setData(clipperData);
       } catch (e) {
@@ -401,12 +402,12 @@ export default function MainContent({
         );
       case 'visualizer':
         return <VisualizerPlaceholder data={data} />;
-      case 'clipper':
+      case 'film':
         // Check if data has the clipper data structure
         if ('query' in data && 'results' in data) {
           return <BasketballClipper data={data as ClipperData} />;
         }
-        return <div className="p-4 border border-red-500 rounded-lg">Invalid data format for Clipper mode</div>;
+        return <div className="p-4 border border-red-500 rounded-lg">Invalid data format for Film mode</div>;
       default:
         return null;
     }

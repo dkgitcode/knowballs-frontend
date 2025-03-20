@@ -10,7 +10,7 @@ export default function Home() {
     <MainContent 
       title="Ask me anything..."
       apiBaseUrl="http://localhost:8000"
-      initialMode="answer"
+      initialMode="film"
       onResetRef={resetFunctionRef}
     />
   )

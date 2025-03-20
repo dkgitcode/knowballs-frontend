@@ -6,23 +6,34 @@ import { useState, useEffect } from 'react'
 import { useToast } from "@/hooks/use-toast"
 
 interface SearchInputProps {
-  onSearch: (prompt: string, mode: 'answer' | 'visualizer' | 'clipper') => void;
-  onModeChange?: (mode: 'answer' | 'visualizer' | 'clipper') => void;
-  initialMode?: 'answer' | 'visualizer' | 'clipper';
+  onSearch: (prompt: string, mode: 'answer' | 'visualizer' | 'film') => void;
+  onModeChange?: (mode: 'answer' | 'visualizer' | 'film') => void;
+  initialMode?: 'answer' | 'visualizer' | 'film';
 }
 
 export default function SearchInput({ 
   onSearch, 
   onModeChange,
-  initialMode = 'answer'
+  initialMode = 'film'
 }: SearchInputProps) {
   const [value, setValue] = useState('')
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
   const [displayedPlaceholder, setDisplayedPlaceholder] = useState('')
   const [isTyping, setIsTyping] = useState(false)
-  const [mode, setMode] = useState<'answer' | 'visualizer' | 'clipper'>(initialMode)
+  const [mode, setMode] = useState<'answer' | 'visualizer' | 'film'>(initialMode)
 
   const { toast } = useToast()
+
+  // 🚨 IMPROVED SYNC WITH INITIAL MODE FROM PROPS 🚨
+  useEffect(() => {
+    // IMMEDIATELY update the mode to match initialMode
+    setMode(initialMode);
+    
+    // Reset placeholder animation when mode changes
+    setIsTyping(false);
+    setDisplayedPlaceholder('');
+    setPlaceholderIndex(Math.floor(Math.random() * getActivePlaceholders().length));
+  }, [initialMode]);
 
   // ✨ MODE-SPECIFIC PLACEHOLDERS ✨
   const answerPlaceholders = [
@@ -43,7 +54,7 @@ export default function SearchInput({
     "Visualize Lakers vs Warriors scoring trends by quarter",
   ]
   
-  const clipperPlaceholders = [
+  const filmPlaceholders = [
     "2016 Steph Curry threes",
     "LeBron clutch blocks",
     "Wembanyama floating threes",
@@ -56,7 +67,7 @@ export default function SearchInput({
   const getActivePlaceholders = () => {
     switch(mode) {
       case 'visualizer': return visualizerPlaceholders;
-      case 'clipper': return clipperPlaceholders;
+      case 'film': return filmPlaceholders;
       default: return answerPlaceholders;
     }
   }
@@ -73,7 +84,7 @@ export default function SearchInput({
     console.log(`Searching in ${mode} mode:`, value)
   }
 
-  const toggleMode = (newMode: 'answer' | 'visualizer' | 'clipper') => {
+  const toggleMode = (newMode: 'answer' | 'visualizer' | 'film') => {
     setMode(newMode)
     // NOTIFY PARENT COMPONENT ABOUT MODE CHANGE 🔄
     if (onModeChange) {
@@ -84,16 +95,6 @@ export default function SearchInput({
     setDisplayedPlaceholder('')
     setPlaceholderIndex(Math.floor(Math.random() * getActivePlaceholders().length))
   }
-
-  // SYNC WITH INITIAL MODE FROM PROPS
-  useEffect(() => {
-    if (initialMode !== mode) {
-      setMode(initialMode)
-      setIsTyping(false)
-      setDisplayedPlaceholder('')
-      setPlaceholderIndex(Math.floor(Math.random() * getActivePlaceholders().length))
-    }
-  }, [initialMode])
 
   useEffect(() => {
     if (isTyping) {
@@ -135,18 +136,31 @@ export default function SearchInput({
 
   return (
     <div className="w-full max-w-3xl mx-auto">
-      {/* MODE TOGGLE BADGES - BOTH VISIBLE AT ONCE 🔄 */}
+      {/* MODE TOGGLE BADGES - REORDERED WITH FILM FIRST 🔄 */}
       <div className="flex justify-end mb-2 gap-2">
+        <button
+          onClick={() => toggleMode('film')}
+          className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all duration-200 ${
+            mode === 'film' 
+              ? 'bg-green-500/10 text-green-500 border border-green-500/30' 
+              : 'bg-muted/30 text-muted-foreground border border-muted-foreground/30 hover:bg-green-500/5 hover:text-green-500/70'
+          }`}
+        >
+          {/* video icon */}
+          <Video className="h-3 w-3" />
+          <span>Film</span>
+        </button>
+        
         <button
           onClick={() => toggleMode('answer')}
           className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all duration-200 ${
             mode === 'answer' 
               ? 'bg-primary/10 text-primary border border-primary/30' 
-              : 'bg-muted/30 text-muted-foreground hover:bg-primary/5 hover:text-primary/70'
+              : 'bg-muted/30 text-muted-foreground border border-muted-foreground/30 hover:bg-primary/5 hover:text-primary/70'
           }`}
         >
           <MessageSquare className="h-3 w-3" />
-          <span>Answer Mode</span>
+          <span>Answer</span>
         </button>
         
         <button
@@ -154,24 +168,11 @@ export default function SearchInput({
           className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all duration-200 ${
             mode === 'visualizer' 
               ? 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/30' 
-              : 'bg-muted/30 text-muted-foreground hover:bg-indigo-500/5 hover:text-indigo-500/70'
+              : 'bg-muted/30 text-muted-foreground border border-muted-foreground/30 hover:bg-indigo-500/5 hover:text-indigo-500/70'
           }`}
         >
           <BarChart2 className="h-3 w-3" />
           <span>Visualizer</span>
-        </button>
-
-        <button
-          onClick={() => toggleMode('clipper')}
-          className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all duration-200 ${
-            mode === 'clipper' 
-              ? 'bg-green-500/10 text-green-500 border border-green-500/30' 
-              : 'bg-muted/30 text-muted-foreground hover:bg-green-500/5 hover:text-green-500/70'
-          }`}
-        >
-          {/* video icon */}
-          <Video className="h-3 w-3" />
-          <span>Clipper</span>
         </button>
       </div>
       

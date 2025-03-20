@@ -23,7 +23,7 @@ const visualizerQuestions = [
 ]
 
 // 🎬 CLIPPER SAMPLE QUESTIONS 🎬
-const clipperQuestions = [
+const filmQuestions = [
   "2016 Steph Curry threes",
   "LeBron clutch blocks",
   "Luka Doncic threes in the 2024 playoffs",
@@ -35,16 +35,16 @@ const clipperQuestions = [
 
 export default function SampleInput({ 
   onSelect, 
-  mode = 'answer' 
+  mode = 'film'
 }: { 
   onSelect: (question: string) => void,
-  mode?: 'answer' | 'visualizer' | 'clipper'
+  mode?: 'answer' | 'visualizer' | 'film'
 }) {
   // GET THE APPROPRIATE QUESTIONS BASED ON THE CURRENT MODE
   const getQuestions = () => {
     switch(mode) {
       case 'visualizer': return visualizerQuestions;
-      case 'clipper': return clipperQuestions;
+      case 'film': return filmQuestions;
       default: return answerQuestions;
     }
   }
