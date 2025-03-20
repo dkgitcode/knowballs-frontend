@@ -26,7 +26,6 @@ const visualizerQuestions = [
 const filmQuestions = [
   "2016 Steph Curry threes",
   "LeBron clutch blocks",
-  "Luka Doncic threes in the 2024 playoffs",
   "Wembanyama floating threes",
   "Jaren Jackson Jr. driving dunks against the Timberwolves",
   "Jaylen Brown clutch buckets in 2024 playoffs",

@@ -371,14 +371,235 @@ export default function MainContent({
     };
   }, [onResetRef, resetChat]);
 
-  const LoadingSkeleton = ({ delay }: { delay: number }) => (
+  // SPECIALIZED MODE-SPECIFIC LOADING SKELETONS 💀
+  const FilmLoadingSkeleton = ({ noResults = false }: { noResults?: boolean }) => {
+    // For no results we'll show a different skeleton that matches the "No Plays Found" UI
+    if (noResults) {
+      return (
+        <div className="w-full animate-fade-in opacity-0">
+          <div className="p-8 border border-border rounded-lg bg-accent/5">
+            {/* SIMPLIFIED NO RESULTS SKELETON */}
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-accent/10 mb-4 animate-pulse" />
+              <div className="h-8 w-48 bg-accent/20 rounded-lg animate-pulse mx-auto mb-3" />
+              <div className="h-4 w-64 bg-accent/20 rounded animate-pulse mx-auto" />
+            </div>
+            
+            {/* SIMPLE QUERY SKELETON WITH KEY CONTEXT */}
+            <div className="mb-6 max-w-md mx-auto">
+              <div className="bg-accent/10 p-4 rounded-md border border-accent/20">
+                <div className="space-y-3">
+                  {/* QUERY SKELETON */}
+                  <div>
+                    <div className="h-5 w-32 bg-accent/20 rounded animate-pulse mb-1" />
+                    <div className="h-9 bg-accent/20 rounded animate-pulse w-full" />
+                  </div>
+                  
+                  {/* CONTEXT DETAILS SKELETON */}
+                  <div className="space-y-2 pt-2 border-t border-accent/20 mt-2">
+                    {/* PLAYER SKELETON */}
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-20 bg-accent/30 rounded animate-pulse" />
+                      <div className="h-4 w-40 bg-accent/20 rounded animate-pulse" />
+                    </div>
+                    
+                    {/* SEASON SKELETON */}
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-20 bg-accent/30 rounded animate-pulse" />
+                      <div className="h-4 w-24 bg-accent/20 rounded animate-pulse" />
+                    </div>
+                    
+                    {/* MEASURE SKELETON */}
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-20 bg-accent/30 rounded animate-pulse" />
+                      <div className="h-4 w-32 bg-accent/20 rounded animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* BUTTON SKELETON */}
+            <div className="text-center">
+              <div className="h-9 w-40 bg-primary/40 rounded-md animate-pulse mx-auto" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Regular film loading skeleton (existing code)
+    return (
+      <div className="w-full max-w-full space-y-8 animate-fade-in opacity-0">
+        {/* HEADER SKELETON WITH RESULTS SUMMARY */}
+        <div className="mb-6">
+          <div className="h-10 w-72 bg-accent/20 rounded-lg animate-pulse mb-2" />
+          <div className="h-6 w-96 bg-accent/20 rounded-lg animate-pulse" />
+        </div>
+        
+        {/* FILTER BAR SKELETON */}
+        <div className="mb-8">
+          <div className="rounded-md shadow-md backdrop-blur-sm border border-white/5 p-3">
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* SEARCH INPUT SKELETON */}
+              <div className="flex-grow min-w-[200px] max-w-[500px] h-9 bg-accent/20 rounded-sm animate-pulse" />
+              
+              {/* SORT DROPDOWN SKELETON */}
+              <div className="w-[140px] h-9 bg-accent/20 rounded-sm animate-pulse" />
+              
+              {/* FILTER TOGGLE BUTTON SKELETON */}
+              <div className="w-[140px] h-9 bg-accent/20 rounded-sm animate-pulse" />
+            </div>
+          </div>
+        </div>
+        
+        {/* VIDEO CARDS SKELETON - MULTIPLE ITEMS */}
+        <div className="space-y-16">
+          {[1, 2, 3].map((_, index) => (
+            <div key={index} className="w-full border-b border-border pb-10">
+              {/* VIDEO PLAYER SKELETON */}
+              <div className="relative aspect-video w-full mb-3 bg-black/40 rounded animate-pulse" />
+              
+              {/* TAGS SKELETON */}
+              <div className="flex flex-wrap gap-2 mb-6">
+                <div className="w-20 h-8 bg-accent/20 rounded-sm animate-pulse" />
+                <div className="w-24 h-8 bg-accent/20 rounded-sm animate-pulse" />
+                <div className="w-16 h-8 bg-accent/20 rounded-sm animate-pulse" />
+              </div>
+              
+              {/* PLAY DETAILS SKELETON */}
+              <div className="max-w-3xl mx-auto">
+                <div className="bg-gradient-to-r from-gray-900/40 to-gray-800/30 backdrop-blur-sm rounded-md p-5 border border-gray-700/50">
+                  <div className="flex flex-col md:flex-row md:items-center gap-5">
+                    {/* GAME INFO SKELETON */}
+                    <div className="flex items-center gap-4 md:min-w-[220px]">
+                      <div className="shrink-0 bg-accent/20 p-2 rounded-md w-8 h-8 animate-pulse" />
+                      <div className="space-y-2">
+                        <div className="h-4 w-32 bg-accent/20 rounded animate-pulse" />
+                        <div className="h-5 w-40 bg-accent/20 rounded animate-pulse" />
+                      </div>
+                    </div>
+                    
+                    {/* DESCRIPTION SKELETON */}
+                    <div className="md:border-l md:border-white/10 md:pl-5 flex-1">
+                      <div className="h-6 bg-accent/20 rounded animate-pulse w-full" />
+                      <div className="h-6 bg-accent/20 rounded animate-pulse w-3/4 mt-2" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  const AnswerLoadingSkeleton = ({ delay = 0 }: { delay?: number }) => (
     <div
-      className="animate-slide-up-in opacity-0"
+      className="animate-slide-up-in opacity-0 w-full max-w-3xl"
       style={{ animationDelay: `${delay}s` }}
     >
-      <div className="h-24 bg-accent/20 rounded-lg animate-pulse" />
+      {/* ARTICLE/MARKDOWN-LIKE SKELETON */}
+      <div className="space-y-6">
+        {/* HEADING SKELETON */}
+        <div className="h-10 bg-accent/20 rounded-lg animate-pulse w-3/4" />
+        
+        {/* PARAGRAPH SKELETONS */}
+        <div className="space-y-3">
+          <div className="h-5 bg-accent/20 rounded animate-pulse" />
+          <div className="h-5 bg-accent/20 rounded animate-pulse" />
+          <div className="h-5 bg-accent/20 rounded animate-pulse w-4/5" />
+        </div>
+        
+        {/* LIST/BULLET POINT SKELETON */}
+        <div className="space-y-3 pl-5">
+          <div className="flex items-center">
+            <div className="h-3 w-3 bg-accent/40 rounded-full mr-3" />
+            <div className="h-5 bg-accent/20 rounded animate-pulse flex-1" />
+          </div>
+          <div className="flex items-center">
+            <div className="h-3 w-3 bg-accent/40 rounded-full mr-3" />
+            <div className="h-5 bg-accent/20 rounded animate-pulse flex-1" />
+          </div>
+        </div>
+        
+        {/* CODE BLOCK SKELETON */}
+        <div className="h-32 bg-accent/30 rounded-md animate-pulse w-full border border-accent/20" />
+        
+        {/* MORE PARAGRAPHS */}
+        <div className="space-y-3 mt-4">
+          <div className="h-5 bg-accent/20 rounded animate-pulse" />
+          <div className="h-5 bg-accent/20 rounded animate-pulse" />
+          <div className="h-5 bg-accent/20 rounded animate-pulse w-2/3" />
+        </div>
+      </div>
     </div>
-  )
+  );
+  
+  const VisualizerLoadingSkeleton = ({ delay = 0 }: { delay?: number }) => (
+    <div
+      className="animate-slide-up-in opacity-0 w-full"
+      style={{ animationDelay: `${delay}s` }}
+    >
+      {/* VISUALIZER SKELETON - CHART/DIAGRAM-LIKE STRUCTURE */}
+      <div className="p-4 border border-accent/30 rounded-lg">
+        <div className="h-8 bg-accent/20 rounded animate-pulse w-64 mb-4" />
+        
+        {/* CONTROLS/LEGEND AREA */}
+        <div className="flex flex-wrap gap-3 mb-6">
+          <div className="h-8 bg-accent/20 rounded animate-pulse w-24" />
+          <div className="h-8 bg-accent/20 rounded animate-pulse w-28" />
+          <div className="h-8 bg-accent/20 rounded animate-pulse w-20" />
+        </div>
+        
+        {/* VISUALIZATION AREA */}
+        <div className="relative w-full aspect-[16/9] bg-accent/10 rounded-md border border-accent/20 animate-pulse flex items-center justify-center">
+          <div className="h-32 w-32 rounded-full bg-accent/20 animate-pulse absolute" style={{ left: '30%', top: '30%' }} />
+          <div className="h-20 w-20 rounded-full bg-accent/20 animate-pulse absolute" style={{ right: '25%', bottom: '20%' }} />
+          <div className="h-40 w-40 rounded-full bg-accent/20 animate-pulse opacity-50 absolute" style={{ right: '40%', top: '40%' }} />
+          <div className="h-3 w-40 bg-accent/30 animate-pulse absolute" style={{ left: '25%', top: '60%', transform: 'rotate(45deg)' }} />
+          <div className="h-3 w-60 bg-accent/30 animate-pulse absolute" style={{ right: '20%', bottom: '30%', transform: 'rotate(-25deg)' }} />
+        </div>
+        
+        {/* DATA POINTS AREA */}
+        <div className="mt-6 space-y-3">
+          <div className="h-5 bg-accent/20 rounded animate-pulse w-full" />
+          <div className="h-5 bg-accent/20 rounded animate-pulse w-full" />
+          <div className="h-5 bg-accent/20 rounded animate-pulse w-3/4" />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderLoadingSkeleton = () => {
+    // CHOOSE THE APPROPRIATE SKELETON BASED ON CURRENT MODE 🔀
+    switch(currentMode) {
+      case 'film':
+        // For film mode, we sometimes want to show the "No Results" skeleton
+        // We'll check if we have an error response that indicates no results
+        // This is a heuristic - we're guessing based on the error message or lack of results
+        const showNoResultsSkeleton = error?.toLowerCase().includes('no plays') 
+          || error?.toLowerCase().includes('no results')
+          || (data && 'results' in data && Array.isArray((data as any).results) && (data as any).results.length === 0);
+          
+        return <FilmLoadingSkeleton noResults={showNoResultsSkeleton} />;
+      case 'visualizer':
+        return (
+          <div className="space-y-6 w-full">
+            <VisualizerLoadingSkeleton delay={0.3} />
+          </div>
+        );
+      case 'answer':
+      default:
+        return (
+          <div className="space-y-6 w-full">
+            <AnswerLoadingSkeleton delay={0.3} />
+            <AnswerLoadingSkeleton delay={0.5} />
+          </div>
+        );
+    }
+  };
 
   const transitionToContent = () => {
     if (isLoading && data) {
@@ -467,12 +688,9 @@ export default function MainContent({
             <div className="h-2"></div>
 
             {isLoading && !showData && (
-              <div className={`space-y-6 w-full ${transitionToContent()}`}>
-                <div className="space-y-4">
-                  <LoadingSkeleton delay={0.3} />
-                  <LoadingSkeleton delay={0.4} />
-                  <LoadingSkeleton delay={0.5} />
-                </div>
+              <div className={`w-full ${transitionToContent()}`}>
+                {/* Use the new renderLoadingSkeleton function to show the appropriate skeleton */}
+                {renderLoadingSkeleton()}
               </div>
             )}
 
