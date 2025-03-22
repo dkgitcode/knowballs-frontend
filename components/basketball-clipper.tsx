@@ -73,21 +73,158 @@ const formatDate = (dateString: string) => {
   })
 }
 
-// REMOVES THE FIRST WORD FROM A STRING NO MATTER WHAT! 🔥
-const removeFirstWord = (text: string): string => {
+// FORMATS BASKETBALL CONTEXT MEASURES INTO HUMAN-READABLE TEXT 🏀
+const formatContextMeasure = (measure: string): string => {
+  const measureMap: Record<string, string> = {
+    "FGM": "field goals made",
+    "FGA": "field goal attempts",
+    "FG3M": "3-pointers",
+    "FG3A": "3-point field goal attempts",
+    "FTM": "free throws",
+    "FTA": "free throw attempts",
+    "OREB": "offensive rebounds",
+    "DREB": "defensive rebounds",
+    "AST": "assists",
+    "FGM_AST": "assisted field goals made",
+    "FG3_AST": "assisted 3-pointers",
+    "STL": "steals",
+    "BLK": "blocks",
+    "TOV": "turnovers",
+    "POSS_END_FT": "possessions ending with free throws",
+    "PTS_PAINT": "points in the paint",
+    "REB": "rebounds",
+    "TM_FGM": "team field goals made",
+    "TM_FGA": "team field goal attempts",
+    "TM_FG3M": "team 3-point field goals made",
+    "TM_FG3A": "team 3-point field goal attempts",
+    "TM_FTM": "team free throws made",
+    "TM_FTA": "team free throw attempts",
+    "TM_OREB": "team offensive rebounds",
+    "TM_DREB": "team defensive rebounds",
+    "TM_REB": "team rebounds",
+    "TM_TEAM_REB": "team team rebounds",
+    "TM_AST": "team assists",
+    "TM_STL": "team steals",
+    "TM_BLK": "team blocks",
+    "TM_BLKA": "team blocked shots",
+    "TM_TOV": "team turnovers",
+    "TM_TEAM_TOV": "team team turnovers",
+    "TM_PF": "team personal fouls",
+    "TM_PFD": "team personal fouls drawn",
+    "TM_PTS": "team points",
+    "TM_PTS_PAINT": "team points in the paint",
+    "TM_PTS_FB": "team fast break points",
+    "TM_PTS_OFF_TOV": "team points off turnovers",
+    "TM_PTS_2ND_CHANCE": "team second chance points",
+    "TM_FGM_AST": "team assisted field goals made",
+    "TM_FG3_AST": "team assisted 3-point field goals",
+    "TM_POSS_END_FT": "team possessions ending with free throws",
+    "OPP_FTM": "opponent free throws made",
+    "OPP_FTA": "opponent free throw attempts",
+    "OPP_OREB": "opponent offensive rebounds",
+    "OPP_DREB": "opponent defensive rebounds",
+    "OPP_REB": "opponent rebounds",
+    "OPP_TEAM_REB": "opponent team rebounds",
+    "OPP_AST": "opponent assists",
+    "OPP_STL": "opponent steals",
+    "OPP_BLK": "opponent blocks",
+    "OPP_BLKA": "opponent blocked shots",
+    "OPP_TOV": "opponent turnovers",
+    "OPP_TEAM_TOV": "opponent team turnovers",
+    "OPP_PF": "opponent personal fouls",
+    "OPP_PFD": "opponent personal fouls drawn",
+    "OPP_PTS": "opponent points",
+    "OPP_PTS_PAINT": "opponent points in the paint",
+    "OPP_PTS_FB": "opponent fast break points",
+    "OPP_PTS_OFF_TOV": "opponent points off turnovers",
+    "OPP_PTS_2ND_CHANCE": "opponent second chance points",
+    "OPP_FGM_AST": "opponent assisted field goals made",
+    "OPP_FG3_AST": "opponent assisted 3-point field goals",
+    "OPP_POSS_END_FT": "opponent possessions ending with free throws"
+  };
+
+  return measureMap[measure] || measure.toLowerCase();
+}
+
+// CAPITALIZES THE FIRST LETTER OF EACH WORD IN A NAME ✨
+const capitalizePlayerName = (name: string): string => {
+  if (!name) return '';
+  
+  // Split the name into words and capitalize the first letter of each word
+  return name.split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+// CREATES A HUMAN-READABLE INTERPRETATION OF THE SEARCH PARAMETERS 🔍
+const createInterpretationMessage = (params: Record<string, any>): string => {
+  if (!params) return "Unknown search";
+  
+  const parts: string[] = [];
+  
+  // Add player name if available (CAPITALIZED! ✨)
+  if (params.player_name) {
+    parts.push(capitalizePlayerName(params.player_name));
+  }
+  
+  // Add shot type if available
+  if (params.shot_type) {
+    parts.push(params.shot_type);
+  }
+  
+  // Add context measure (formatted) if available
+  if (params.context_measure) {
+    parts.push(formatContextMeasure(params.context_measure));
+  }
+  
+  // Add season if available
+  if (params.season) {
+    parts.push(`in the ${params.season}`);
+  }
+  
+  // Add season type if available
+  if (params.season_type) {
+    parts.push(params.season_type.toLowerCase());
+  }
+  
+  // Add clutch indicator if available
+  if (params.clutch_time) {
+    parts.push("in the clutch");
+  }
+  
+  // Join all parts with spaces
+  return parts.length > 0 ? parts.join(" ") : "basketball plays";
+}
+
+// REMOVES FIRST WORD IF IT MATCHES PLAYER'S LAST NAME 🔥
+const removeFirstWord = (text: string, playerName?: string): string => {
   if (!text || typeof text !== 'string') return '';
   
   // Trim any leading whitespace first
   const trimmed = text.trim();
   
-  // Find the position of the first space
+  // If no player name provided, return the original text
+  if (!playerName) return trimmed;
+  
+  // Get the last name (last word) from player_name
+  const playerWords = playerName.split(' ');
+  const lastName = playerWords[playerWords.length - 1].toLowerCase();
+  
+  // Get the first word of the description
   const firstSpaceIndex = trimmed.indexOf(' ');
   
-  // If no space is found, it means there's only one word or empty string
-  if (firstSpaceIndex === -1) return '';
+  // If no space is found, it means there's only one word
+  if (firstSpaceIndex === -1) return trimmed;
   
-  // Return everything after the first space
-  return trimmed.substring(firstSpaceIndex + 1);
+  const firstWord = trimmed.substring(0, firstSpaceIndex).toLowerCase();
+  
+  // Only remove first word if it matches the player's last name
+  if (firstWord === lastName) {
+    return trimmed.substring(firstSpaceIndex + 1);
+  }
+  
+  // Otherwise, return the full description
+  return trimmed;
 }
 
 const extractTeams = (gameCode: string) => {
@@ -184,7 +321,7 @@ export default function BasketballClipper({ data }: ClipperProps) {
   const [activeTagFilters, setActiveTagFilters] = useState<{key: string, value: any}[]>([]) // Tag filters
   const [searchQuery, setSearchQuery] = useState('') // Description search
   const [showFilters, setShowFilters] = useState(false) // Toggle filter panel
-  
+  console.log(data.parameters)
   // Refs
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
@@ -318,7 +455,6 @@ export default function BasketballClipper({ data }: ClipperProps) {
     const player = data.parameters?.player_name || null;
     const measure = data.parameters?.context_measure || null;
     const season_type = data.parameters?.season_type || null;
-    {console.log(data.parameters)}
     return (
       <div className="w-full animate-fade-in opacity-0">
         <div className="p-8 border border-border rounded-lg bg-accent/5">
@@ -357,7 +493,9 @@ export default function BasketballClipper({ data }: ClipperProps) {
                     {measure && (
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground min-w-[80px]">Measure:</span>
-                        <span className="font-medium">{measure}</span>
+                        <span className="font-medium">{
+                          formatContextMeasure(measure)
+                          }</span>
                       </div>
                     )}
                     {season_type && (
@@ -409,7 +547,7 @@ export default function BasketballClipper({ data }: ClipperProps) {
           )}
         </h2>
         <p className="text-xl text-muted-foreground">
-          Showing results for <span className="font-medium text-primary">{data.query}</span>
+          Interpreted as <span className="font-medium text-primary">{createInterpretationMessage(data.parameters)}</span>
         </p>
       </div>
       
@@ -646,7 +784,7 @@ export default function BasketballClipper({ data }: ClipperProps) {
                       
                       {/* PLAY DESCRIPTION, VERTICALLY CENTERED IN ITS CONTAINER */}
                       <div className="md:border-l md:border-white/10 md:pl-5 flex-1 flex items-center">
-                        <h3 className="text-xl font-medium leading-snug">{removeFirstWord(play.description)}</h3>
+                        <h3 className="text-xl font-medium leading-snug">{removeFirstWord(play.description, data.parameters?.player_name)}</h3>
                       </div>
                     </div>
                   </div>

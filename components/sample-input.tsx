@@ -25,11 +25,13 @@ const visualizerQuestions = [
 // 🎬 CLIPPER SAMPLE QUESTIONS 🎬
 const filmQuestions = [
   "2016 Steph Curry threes",
-  "LeBron clutch blocks",
+  "LeBron clutch blocks in the 2016 playoffs",
   "Wembanyama floating threes",
-  "Jaren Jackson Jr. driving dunks against the Timberwolves",
+  "Harden stepback threes in 2019",
+  "Trae Young threes from downtown",
   "Jaylen Brown clutch buckets in 2024 playoffs",
-  "Lamelo Ball floaters"
+  "2017 Kevin Durant mid range shots",
+  "Nikola Jokic assists in the 2023 playoffs",
 ]
 
 export default function SampleInput({ 

@@ -81,7 +81,14 @@ export default function MainContent({
   const { isOpen } = useSidebarStore()
 
   const isProduction = process.env.NODE_ENV === 'production'
-  const effectiveApiUrl = isProduction 
+  // const isProduction = true
+  
+  // UPDATE API URLs WITH PRODUCTION ENDPOINTS 🌐
+  const FILM_API_URL = isProduction 
+    ? "https://knowballs-4cs5au5qsa-uc.a.run.app"
+    : apiBaseUrl
+
+  const QUESTIONS_API_URL = isProduction 
     ? "https://knowballs-backend-4808b557c795.herokuapp.com" 
     : apiBaseUrl
 
@@ -136,14 +143,14 @@ export default function MainContent({
       let response;
       // Different API endpoints based on mode
       if (mode === 'film') {
-        response = await fetch(`${effectiveApiUrl}/api/find-plays`, {
+        response = await fetch(`${FILM_API_URL}/find-plays`, {
           method: 'POST',
           body: JSON.stringify({ query: prompt }),
           signal: controllerRef.current.signal
         });
       } else {
         // Both 'answer' and 'visualizer' modes use the same endpoint
-        response = await fetch(`${effectiveApiUrl}/api/query?mode=${mode}`, {
+        response = await fetch(`${QUESTIONS_API_URL}/api/query?mode=${mode}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -698,7 +705,7 @@ export default function MainContent({
               <div className="w-full max-w-3xl mx-auto space-y-4 content-area">
                 <h2 className="text-2xl font-bold text-red-500">Error Loading Data</h2>
                 <p className="text-muted-foreground">{error}</p>
-                <p className="text-sm">Please check that your API is running at {effectiveApiUrl}</p>
+                <p className="text-sm">Please check that your API is running at {currentMode === 'film' ? FILM_API_URL : QUESTIONS_API_URL}</p>
                 <button
                   onClick={() => handleSearch(userPrompt, currentMode)}
                   className="px-4 py-2 bg-primary text-primary-foreground rounded-md"

@@ -368,7 +368,7 @@ export default function Sidebar({ onReset }: SidebarProps) {
             
             {/* QUESTION HISTORY LIST - ONLY SHOWN WHEN USER IS AUTHENTICATED 📚 */}
             {user && (
-              <div className="mt-2 pl-8">
+              <div className="mt-2 pl-5">
                
                 <HistoryList 
                   onSelectQuestion={handleSelectQuestion} 
@@ -543,7 +543,7 @@ export default function Sidebar({ onReset }: SidebarProps) {
           
           {/* QUESTION HISTORY LIST - ONLY SHOWN WHEN USER IS AUTHENTICATED 📚 */}
           {user && (
-            <div className="mt-2 pl-8">
+            <div className="mt-2 pl-5">
               <HistoryList 
                 onSelectQuestion={handleSelectQuestion} 
               />
