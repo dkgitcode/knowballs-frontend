@@ -89,7 +89,7 @@ export default function MainContent({
     : apiBaseUrl
 
   const QUESTIONS_API_URL = isProduction 
-    ? "https://knowballs-backend-4808b557c795.herokuapp.com" 
+    ? "https://knowballs-backend-4808b557c795.herokuapp.com/" 
     : apiBaseUrl
 
   // Create a ref to store the fetch controller for cancellation
