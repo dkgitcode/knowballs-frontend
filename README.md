@@ -50,7 +50,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 - 🔐 Email/password authentication
 - 👤 User profiles
 - 🔄 Persistent sessions
-- �� Protected routes
+- 🔒 Protected routes
 
 ## Demo Features
 
@@ -87,6 +87,40 @@ The full version of Manimsplain is currently being developed with additional fea
 - **UI Components**: Customized shadcn/ui
 - **Animations**: Manim (full version)
 - **Typography**: PT Serif
+
+## Project Structure 🏗️
+
+Here's an overview of the main directories and files in this project:
+
+*   **`/.next/`**: Contains the output of the Next.js build. You DON'T usually need to touch this.
+*   **`/app/`**: Core directory for the Next.js App Router.
+    *   `layout.tsx`: The ROOT layout for the entire application.
+    *   `page.tsx`: The main landing page of the application.
+    *   `globals.css`: GLOBAL CSS styles.
+    *   `/api/`: Contains API route handlers.
+    *   `/[...route]/page.tsx` or `/[...route]/layout.tsx`: Defines pages and layouts for different routes (e.g., `/login`, `/profile`, `/visualizer`).
+*   **`/components/`**: Contains reusable React components used throughout the application.
+    *   `/ui/`: Base UI components, likely from shadcn/ui, customized for the project.
+    *   `/pages/`: This seems to contain components that are specific to certain pages or larger sections of the UI.
+    *   Other `.tsx` files: Individual components like `sidebar.tsx`, `search-input.tsx`, etc.
+*   **`/hooks/`**: Custom React Hooks to encapsulate and reuse stateful logic (e.g., `useAuth.ts`, `useToast.ts`).
+*   **`/lib/`**: Contains utility functions. Currently, it has a `utils.ts`.
+*   **`/node_modules/`**: Stores all the project dependencies. You DON'T usually need to touch this.
+*   **`/public/`**: Stores static assets like images, fonts, and videos that are served directly by the browser.
+*   **`/utils/`**: Contains utility functions and helpers.
+    *   `utils.ts`: General utility functions. (NOTE: There's also a `lib/utils.ts`, consider consolidating these if they serve similar purposes! 🤔)
+    *   `/supabase/`: Likely contains Supabase client initialization and helper functions for interacting with Supabase services.
+*   **`/.cursor/`**: Directory for Cursor specific files. You DON'T usually need to touch this.
+*   **`/.git/`**: Directory for Git version control. You DON'T usually need to touch this.
+*   **`add_delete_policy.sql`**: SQL script, possibly for setting up Supabase database policies.
+*   **`components.json`**: Configuration file for shadcn/ui, defining component dependencies and styles.
+*   **`middleware.ts`**: Next.js middleware for running code before a request is completed (e.g., for authentication, redirects).
+*   **`next.config.ts`**: Configuration file for Next.js.
+*   **`package.json`**: Lists project dependencies and scripts.
+*   **`postcss.config.mjs`**: Configuration for PostCSS, used with Tailwind CSS.
+*   **`tailwind.config.ts`**: Configuration file for Tailwind CSS.
+*   **`tsconfig.json`**: Configuration file for TypeScript.
+*   **`README.md`**: THIS FILE! 🎉 It provides an overview of the project.
 
 ## Contributing
 

@@ -390,7 +390,7 @@ export default function Sidebar({ onReset }: SidebarProps) {
                     <User size={20} className="text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{user.email}</p>
+                    <p className="text-sm font-medium truncate">{user.email.split('@')[0]}</p>
                     <p className="text-xs text-muted-foreground truncate">Free Account</p>
                   </div>
                 </div>
@@ -563,7 +563,7 @@ export default function Sidebar({ onReset }: SidebarProps) {
                   <User size={20} className="text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{user.email}</p>
+                  <p className="text-sm font-medium truncate">{user.email.split('@')[0]}</p>
                   <p className="text-xs text-muted-foreground truncate">Free Account</p>
                 </div>
               </div>
