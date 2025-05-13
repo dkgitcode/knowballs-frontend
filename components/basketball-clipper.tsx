@@ -1,13 +1,19 @@
 "use client"
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { Calendar, Star, ArrowUpDown, SortDesc, Filter, Search, X } from 'lucide-react'
+import { Calendar, Star, ArrowUpDown, SortDesc, Filter, Search, X, Download, CheckSquare, Square } from 'lucide-react'
+import JSZip from 'jszip'
 
 // Import Shadcn components
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+
+// Import auth hook
+import { useAuth } from "@/hooks/use-auth"
 
 // Define types for the basketball play data
 interface VideoSizes {
@@ -314,13 +320,65 @@ const hasTag = (play: BasketballPlay, tagKey: string, tagValue: any): boolean =>
   });
 };
 
+// Utility function to retry a fetch with backoff
+const fetchWithRetry = async (url: string, maxRetries = 3): Promise<Response> => {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Instead of fetching directly, use our own API as a proxy
+      // This avoids CORS issues with the NBA servers
+      const proxyUrl = `/api/proxy-video?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response;
+    } catch (error) {
+      lastError = error as Error;
+      // Wait longer between each retry (exponential backoff)
+      const delay = Math.pow(2, attempt) * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError || new Error('Max retries reached');
+};
+
 export default function BasketballClipper({ data }: ClipperProps) {
+  // Get current user from auth hook
+  const { user } = useAuth()
+  const isAuthorizedForDownload = user && user.email === 'danjkim11@gmail.com'
+  
   // State for video display and filtering
   const [visibleCount, setVisibleCount] = useState(10)  // Number of videos to display
   const [sortOption, setSortOption] = useState<SortOption>('default') // Sort state
   const [activeTagFilters, setActiveTagFilters] = useState<{key: string, value: any}[]>([]) // Tag filters
   const [searchQuery, setSearchQuery] = useState('') // Description search
   const [showFilters, setShowFilters] = useState(false) // Toggle filter panel
+  
+  // Download modal state
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false)
+  const [selectedPlaysForDownload, setSelectedPlaysForDownload] = useState<Set<string>>(new Set())
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadCount, setDownloadCount] = useState(10) // Default to 10 plays
+  const [downloadProgress, setDownloadProgress] = useState<{
+    current: number;
+    total: number;
+    percent: number;
+    status: string;
+    errors: Array<{playId: string, message: string}>;
+    successfulPlays: Set<string>; // Track which plays were successfully downloaded
+  }>({ 
+    current: 0, 
+    total: 0, 
+    percent: 0, 
+    status: 'Preparing download...', 
+    errors: [],
+    successfulPlays: new Set()
+  })
+  
   console.log(data.parameters)
   // Refs
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
@@ -373,6 +431,20 @@ export default function BasketballClipper({ data }: ClipperProps) {
       return 0; // Fallback
     });
   }, [data?.results, sortOption, activeTagFilters, searchQuery]);
+  
+  // Initialize selected plays for download - default to first 10 in KB score sort
+  useEffect(() => {
+    if (data?.results && data.results.length > 0) {
+      const initialPlaysToSelect = Math.min(10, data.results.length);
+      const initialSelectedPlays = new Set<string>();
+      
+      for (let i = 0; i < initialPlaysToSelect; i++) {
+        initialSelectedPlays.add(`${data.results[i].game_id}-${data.results[i].event_id}`);
+      }
+      
+      setSelectedPlaysForDownload(initialSelectedPlays);
+    }
+  }, [data?.results]);
   
   // Reset visible count when filters change
   useEffect(() => {
@@ -447,6 +519,303 @@ export default function BasketballClipper({ data }: ClipperProps) {
       videoContainersRef.current = videoContainersRef.current.slice(0, filteredAndSortedResults.length)
     }
   }, [filteredAndSortedResults])
+  
+  // Toggle play selection for download
+  const togglePlaySelection = useCallback((play: BasketballPlay) => {
+    const playId = `${play.game_id}-${play.event_id}`;
+    
+    setSelectedPlaysForDownload(prev => {
+      const newSet = new Set(prev);
+      
+      if (newSet.has(playId)) {
+        newSet.delete(playId);
+      } else {
+        newSet.add(playId);
+      }
+      
+      return newSet;
+    });
+  }, []);
+  
+  // Toggle all plays - select or deselect all
+  const toggleAllPlays = useCallback(() => {
+    if (!data?.results) return;
+    
+    if (selectedPlaysForDownload.size === data.results.length) {
+      // Deselect all
+      setSelectedPlaysForDownload(new Set());
+    } else {
+      // Select all
+      const allPlays = new Set<string>();
+      data.results.forEach(play => {
+        allPlays.add(`${play.game_id}-${play.event_id}`);
+      });
+      setSelectedPlaysForDownload(allPlays);
+    }
+  }, [data?.results, selectedPlaysForDownload]);
+  
+  // Handle download action
+  const handleDownload = useCallback(async (onlyFailedPlays = false) => {
+    // Ensure the user is authorized to download
+    if (!isAuthorizedForDownload) {
+      console.error("Unauthorized download attempt");
+      return;
+    }
+    
+    if (!data?.results || selectedPlaysForDownload.size === 0) return;
+    
+    setIsDownloading(true);
+    
+    // If retrying failed downloads, keep track of previously successful downloads
+    const successfulPlays = onlyFailedPlays 
+      ? downloadProgress.successfulPlays 
+      : new Set<string>();
+    
+    // Determine which plays to download
+    const playsToDownload = onlyFailedPlays
+      ? Array.from(selectedPlaysForDownload).filter(id => !successfulPlays.has(id))
+      : Array.from(selectedPlaysForDownload);
+    
+    setDownloadProgress({
+      current: successfulPlays.size,
+      total: selectedPlaysForDownload.size,
+      percent: Math.round((successfulPlays.size / selectedPlaysForDownload.size) * 100),
+      status: onlyFailedPlays ? 'Retrying failed downloads...' : 'Preparing download...',
+      errors: [],
+      successfulPlays
+    });
+    
+    // If all plays are already downloaded, just create the ZIP
+    if (playsToDownload.length === 0 && successfulPlays.size > 0) {
+      setDownloadProgress(prev => ({
+        ...prev,
+        status: 'All videos already downloaded. Creating ZIP...',
+        percent: 100
+      }));
+      
+      // Continue to ZIP creation
+    } else if (playsToDownload.length === 0) {
+      setIsDownloading(false);
+      return;
+    }
+    
+    try {
+      // Create a new JSZip instance
+      const zip = new JSZip();
+      
+      // Create a folder for the videos
+      const videosFolder = zip.folder("basketball-plays");
+      
+      // Also create a metadata file with info about these plays
+      const metadataContent = {
+        downloadDate: new Date().toISOString(),
+        query: data.query,
+        parameters: data.parameters,
+        plays: [] as any[]
+      };
+      
+      // Keep track of downloaded files for progress
+      let downloadedCount = successfulPlays.size;
+      let errorCount = 0;
+      const totalCount = selectedPlaysForDownload.size;
+      const errors: Array<{playId: string, message: string}> = [];
+      
+      // Create an object to store video blobs for successful downloads
+      const videoBlobs: Record<string, Blob> = {};
+      
+      // Process each selected play
+      const downloadPromises = playsToDownload.map(async (id) => {
+        const [gameId, eventId] = id.split('-');
+        const play = data.results.find(p => p.game_id === gameId && p.event_id === Number(eventId));
+        
+        if (!play) return;
+        
+        // Add to metadata
+        metadataContent.plays.push({
+          gameId: play.game_id,
+          eventId: play.event_id,
+          date: play.date,
+          teams: `${play.visiting_team} @ ${play.home_team}`,
+          description: play.description,
+          period: play.period,
+          score: `${play.visitor_score_after}-${play.home_score_after}`
+        });
+        
+        // Get video URL
+        const videoUrl = play.videos.medium.url;
+        
+        try {
+          // Update status for this specific video
+          setDownloadProgress(prev => ({
+            ...prev,
+            status: `Downloading: ${play.visiting_team} @ ${play.home_team}`
+          }));
+          
+          // Fetch the video file with retry logic
+          const response = await fetchWithRetry(videoUrl);
+          
+          // Check if the response is JSON (error from our proxy)
+          const contentType = response.headers.get('Content-Type');
+          if (contentType && contentType.includes('application/json')) {
+            // This is an error response from our proxy
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Unknown proxy error');
+          }
+          
+          // Get the video as blob
+          const videoBlob = await response.blob();
+          
+          // Verify we got actual video data and not an empty or tiny response
+          if (videoBlob.size < 10000) { // Less than 10KB is probably not a video
+            throw new Error(`Invalid video data received (${videoBlob.size} bytes)`);
+          }
+          
+          // Create a safe filename from play description
+          const safeDescription = play.description
+            .replace(/[^a-z0-9]/gi, '_')
+            .replace(/_+/g, '_')
+            .substring(0, 30);
+          
+          // Add to zip with a descriptive filename
+          const fileName = `${play.date.split('T')[0]}_${play.visiting_team}_at_${play.home_team}_${safeDescription}.mp4`;
+          videoBlobs[fileName] = videoBlob;
+          
+          // Mark as successful
+          successfulPlays.add(id);
+          
+          // Update progress
+          downloadedCount++;
+          setDownloadProgress(prev => ({
+            ...prev,
+            current: downloadedCount,
+            percent: Math.round(((downloadedCount + errorCount) / totalCount) * 100),
+            successfulPlays: new Set(successfulPlays)
+          }));
+        } catch (error) {
+          errorCount++;
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.error(`Error downloading video for ${play.description}:`, error);
+          
+          // Add to errors list
+          errors.push({
+            playId: id,
+            message: `${play.visiting_team} @ ${play.home_team}: ${errorMessage}` 
+          });
+          
+          // Update progress including this error
+          setDownloadProgress(prev => ({
+            ...prev,
+            errors: [...prev.errors, { 
+              playId: id, 
+              message: `${play.visiting_team} @ ${play.home_team}: ${errorMessage}` 
+            }],
+            percent: Math.round(((downloadedCount + errorCount) / totalCount) * 100),
+            successfulPlays: new Set(successfulPlays)
+          }));
+        }
+      });
+      
+      // Wait for all downloads to complete
+      await Promise.all(downloadPromises);
+      
+      // Check if we have any successful downloads
+      if (downloadedCount === 0) {
+        throw new Error('No videos could be downloaded. Please try again later.');
+      }
+      
+      // Add all video blobs to the zip
+      Object.entries(videoBlobs).forEach(([fileName, blob]) => {
+        videosFolder?.file(fileName, blob);
+      });
+      
+      // Add metadata file
+      videosFolder?.file('metadata.json', JSON.stringify(metadataContent, null, 2));
+      
+      // Add a README file with instructions
+      const readmeContent = `# Basketball Plays Collection
+Downloaded on: ${new Date().toLocaleDateString()}
+
+This collection contains ${downloadedCount} basketball plays ${data.parameters.player_name ? `featuring ${data.parameters.player_name}` : ''}.
+${errors.length > 0 ? `\n⚠️ Note: ${errors.length} videos failed to download.\n` : ''}
+
+## Contents
+- MP4 video files of each play
+- metadata.json with details about each play
+
+## Search Parameters
+${Object.entries(data.parameters).map(([key, value]) => `- ${key}: ${value}`).join('\n')}
+
+## Troubleshooting
+If some videos failed to download, this is likely due to CORS restrictions or temporary server issues.
+Try downloading again later or use a different browser.
+
+Enjoy your basketball highlights!
+`;
+      videosFolder?.file('README.md', readmeContent);
+      
+      // Update status for zip generation
+      setDownloadProgress(prev => ({
+        ...prev,
+        status: 'Creating ZIP file...',
+      }));
+      
+      // Generate the zip file
+      const zipBlob = await zip.generateAsync({ 
+        type: "blob",
+        compression: "DEFLATE",
+        compressionOptions: {
+          level: 5 // Balance between speed and compression
+        }
+      }, (metadata) => {
+        // Update zip creation progress
+        setDownloadProgress(prev => ({
+          ...prev,
+          percent: Math.round(metadata.percent),
+          status: `Creating ZIP: ${Math.round(metadata.percent)}% complete`
+        }));
+      });
+      
+      // Update status for download
+      setDownloadProgress(prev => ({
+        ...prev,
+        status: errors.length > 0 
+          ? `Download ready! (${downloadedCount} of ${totalCount} successful)` 
+          : 'Download ready!',
+        percent: 100
+      }));
+      
+      // Create a download link for the zip
+      const zipUrl = URL.createObjectURL(zipBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = zipUrl;
+      downloadLink.download = `basketball-plays-${new Date().toISOString().split('T')[0]}.zip`;
+      
+      // Trigger the download
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      
+      // Clean up
+      URL.revokeObjectURL(zipUrl);
+      
+      // Close the modal after a short delay to let user see completion
+      setTimeout(() => {
+        setIsDownloadModalOpen(false);
+      }, 1500);
+    } catch (error) {
+      console.error('Download failed:', error);
+      setDownloadProgress(prev => ({
+        ...prev,
+        status: `Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        errors: [...prev.errors, { playId: 'global', message: 'Failed to create ZIP file' }]
+      }));
+      // In a real app, show an error toast here
+    } finally {
+      setTimeout(() => {
+        setIsDownloading(false);
+      }, 3000); // Give user time to see the completion status
+    }
+  }, [data, selectedPlaysForDownload, fetchWithRetry, downloadProgress.successfulPlays]);
   
   // No results state
   if (!data?.results || data.results.length === 0) {
@@ -613,6 +982,18 @@ export default function BasketballClipper({ data }: ClipperProps) {
               Filters {activeTagFilters.length > 0 && `(${activeTagFilters.length})`}
             </Button>
             
+            {/* DOWNLOAD BUTTON */}
+            {isAuthorizedForDownload && (
+              <Button 
+                onClick={() => setIsDownloadModalOpen(true)}
+                variant="outline"
+                className="w-[140px] h-9 rounded-sm bg-blue-500/20 text-blue-300 border border-blue-400/30 hover:bg-blue-500/30 hover:text-blue-200"
+              >
+                <Download className="w-4 h-4 mr-2 text-blue-300" />
+                Download
+              </Button>
+            )}
+            
             {/* CLEAR ALL BUTTON - ONLY SHOW IF FILTERS ARE ACTIVE */}
             {(activeTagFilters.length > 0 || searchQuery) && (
               <Button 
@@ -688,6 +1069,214 @@ export default function BasketballClipper({ data }: ClipperProps) {
           )}
         </div>
       </div>
+      
+      {/* DOWNLOAD MODAL DIALOG */}
+      {isAuthorizedForDownload && (
+        <Dialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+          <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-xl">Download Basketball Plays</DialogTitle>
+              <DialogDescription>
+                Select the plays you want to download as a ZIP file. We'll bundle the videos together for you.
+              </DialogDescription>
+            </DialogHeader>
+            
+            {/* INFO ABOUT DOWNLOAD PROCESS */}
+            <div className="p-3 bg-blue-950/50 border border-blue-900 rounded-md mb-4">
+              <h4 className="text-sm font-medium text-blue-300 flex items-center mb-1">
+                <span className="mr-2">ℹ️</span>
+                <span>Download Information</span>
+              </h4>
+              <p className="text-xs text-blue-200/80">
+                Videos are downloaded through our secure proxy to bypass CORS restrictions.
+                Some videos may fail to download due to server limitations. If that happens,
+                you can try the "Retry Failed Downloads" option.
+              </p>
+            </div>
+            
+            {/* SELECT ALL & COUNTER */}
+            <div className="flex items-center justify-between py-2 border-b border-gray-700 mb-4">
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  className="p-2 h-auto text-sm flex items-center gap-2"
+                  onClick={toggleAllPlays}
+                >
+                  {selectedPlaysForDownload.size === data?.results?.length ? (
+                    <CheckSquare className="h-4 w-4 text-primary" />
+                  ) : (
+                    <Square className="h-4 w-4" />
+                  )}
+                  <span>{selectedPlaysForDownload.size === data?.results?.length ? 'Deselect All' : 'Select All'}</span>
+                </Button>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {selectedPlaysForDownload.size} of {data?.results?.length} selected
+              </div>
+            </div>
+            
+            {/* PLAY SELECTION LIST */}
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+              {data?.results?.map((play, index) => {
+                const playId = `${play.game_id}-${play.event_id}`;
+                const isSelected = selectedPlaysForDownload.has(playId);
+                const { home, away } = extractTeams(play.game_code);
+                const matchupText = `${play.visiting_team} @ ${play.home_team}`;
+                
+                return (
+                  <div 
+                    key={playId}
+                    className={`flex items-start gap-3 p-3 rounded-md border transition-colors ${
+                      isSelected 
+                        ? 'bg-primary/10 border-primary/30' 
+                        : 'bg-accent/10 border-accent/20 hover:border-accent/30'
+                    }`}
+                    onClick={() => togglePlaySelection(play)}
+                    role="button"
+                  >
+                    {/* CHECKBOX */}
+                    <div className="pt-1">
+                      <Checkbox 
+                        className="h-5 w-5 rounded-sm"
+                        checked={isSelected}
+                        onCheckedChange={() => togglePlaySelection(play)}
+                      />
+                    </div>
+                    
+                    {/* PLAY DETAILS */}
+                    <div className="flex-1">
+                      <div className="flex flex-col gap-1">
+                        {/* DESCRIPTION */}
+                        <p className="text-sm font-medium">
+                          {removeFirstWord(play.description, data.parameters?.player_name)}
+                        </p>
+                        
+                        {/* GAME & DATE INFO */}
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-gray-400">{formatDate(play.date)}</div>
+                          <div className="text-xs text-gray-400">{matchupText}</div>
+                        </div>
+                        
+                        {/* TAGS */}
+                        {Array.isArray(play.tags) && play.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {play.tags.map((tag, tagIndex) => {
+                              // Get the key-value pair from the tag object
+                              const [tagKey, tagValue] = Object.entries(tag)[0];
+                              
+                              return (
+                                <div 
+                                  key={`${tagKey}-${tagIndex}`} 
+                                  className={`px-2 py-0.5 text-xs rounded-sm border
+                                    ${getTagBadgeColor(tagKey, tagValue)}`}
+                                >
+                                  <span className="mr-1">{getTagIcon(tagKey, tagValue)}</span>
+                                  <span>{getTagDisplayValue(tagKey, tagValue)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <DialogFooter className="mt-4 pt-2 border-t border-gray-700">
+              <div className="w-full flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  File size estimate: ~{(selectedPlaysForDownload.size * 5).toFixed(1)}MB
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsDownloadModalOpen(false)}
+                    disabled={isDownloading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={() => handleDownload(false)}
+                    disabled={selectedPlaysForDownload.size === 0 || isDownloading}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    {isDownloading ? (
+                      <>
+                        <div className="h-4 w-4 border-2 border-white border-r-transparent rounded-full animate-spin mr-2"></div>
+                        <span>Preparing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4 mr-2" />
+                        <span>Download ZIP</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+              
+              {/* DOWNLOAD PROGRESS INDICATOR */}
+              {isDownloading && (
+                <div className="w-full mt-4 pt-4 border-t border-gray-700">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm font-medium">{downloadProgress.status}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {downloadProgress.current}/{downloadProgress.total} files
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-2.5 mb-3">
+                    <div 
+                      className={`h-2.5 rounded-full transition-all duration-300 ease-in-out ${
+                        downloadProgress.errors.length > 0 ? 'bg-amber-600' : 'bg-blue-600'
+                      }`}
+                      style={{ width: `${downloadProgress.percent}%` }}
+                    ></div>
+                  </div>
+                  
+                  {/* ERRORS DISPLAY */}
+                  {downloadProgress.errors.length > 0 && (
+                    <div className="mt-3 text-sm text-red-400 max-h-24 overflow-y-auto">
+                      <p className="font-medium text-red-300 mb-1">
+                        ⚠️ {downloadProgress.errors.length} errors encountered:
+                      </p>
+                      <ul className="list-disc pl-5 space-y-1">
+                        {downloadProgress.errors.slice(0, 3).map((error, index) => (
+                          <li key={index}>
+                            Failed to download a video: {error.message.substring(0, 50)}
+                            {error.message.length > 50 ? '...' : ''}
+                          </li>
+                        ))}
+                        {downloadProgress.errors.length > 3 && (
+                          <li>...and {downloadProgress.errors.length - 3} more errors</li>
+                        )}
+                      </ul>
+                      <p className="mt-1 text-xs text-gray-400">
+                        Don't worry, we'll still download the successful files!
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* RETRY BUTTON - SHOWN WHEN DOWNLOAD HAS ERRORS */}
+                  {downloadProgress.errors.length > 0 && downloadProgress.percent === 100 && (
+                    <div className="mt-3">
+                      <Button
+                        onClick={() => handleDownload(true)}
+                        disabled={isDownloading}
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-medium"
+                      >
+                        <span className="mr-2">🔄</span>
+                        Retry Failed Downloads
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       
       {/* NO FILTERED RESULTS STATE */}
       {noFilteredResults && (

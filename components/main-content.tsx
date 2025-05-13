@@ -80,8 +80,8 @@ export default function MainContent({
   const { toast } = useToast()
   const { isOpen } = useSidebarStore()
 
-  const isProduction = process.env.NODE_ENV === 'production'
-  // const isProduction = true
+  // const isProduction = process.env.NODE_ENV === 'production'
+  const isProduction = true
   
   // UPDATE API URLs WITH PRODUCTION ENDPOINTS 🌐
   const FILM_API_URL = isProduction 
