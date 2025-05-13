@@ -621,8 +621,35 @@ export default function BasketballClipper({ data }: ClipperProps) {
       // Create a new JSZip instance
       const zip = new JSZip();
       
-      // Create a folder for the videos
-      const videosFolder = zip.folder("basketball-plays");
+      // Get the query or create a fallback using player name
+      let zipBaseName = '';
+      
+      // First try to use the actual search query if available
+      if (data.query && typeof data.query === 'string' && data.query.trim() !== '') {
+        zipBaseName = data.query
+          .trim()
+          .replace(/[^a-z0-9]/gi, '_')
+          .replace(/_+/g, '_')
+          .substring(0, 50);
+      } 
+      // If no query, try to use the player's name from parameters
+      else if (data.parameters?.player_name) {
+        // Extract last name from player name (usually the last word)
+        const playerName = data.parameters.player_name;
+        const nameParts = playerName.split(' ');
+        const lastName = nameParts[nameParts.length - 1];
+        
+        zipBaseName = `${lastName}_clips`;
+      } 
+      // Final fallback
+      else {
+        zipBaseName = 'basketball_clips';
+      }
+      
+      console.log("Using base name for ZIP:", zipBaseName);
+      
+      // Create a folder for the videos with the same name as the ZIP file
+      const videosFolder = zip.folder(zipBaseName);
       
       // Also create a metadata file with info about these plays
       const metadataContent = {
@@ -806,7 +833,7 @@ Enjoy your basketball highlights!
       const zipUrl = URL.createObjectURL(zipBlob);
       const downloadLink = document.createElement('a');
       downloadLink.href = zipUrl;
-      downloadLink.download = `basketball-plays-${new Date().toISOString().split('T')[0]}.zip`;
+      downloadLink.download = `${zipBaseName}.zip`;
       
       // Trigger the download
       document.body.appendChild(downloadLink);
