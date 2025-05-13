@@ -329,14 +329,32 @@ const fetchWithRetry = async (url: string, maxRetries = 3): Promise<Response> =>
       // Instead of fetching directly, use our own API as a proxy
       // This avoids CORS issues with the NBA servers
       const proxyUrl = `/api/proxy-video?url=${encodeURIComponent(url)}`;
-      const response = await fetch(proxyUrl);
+      
+      // Add a cache-busting parameter to avoid cached errors
+      const cacheBuster = `&t=${Date.now()}`;
+      const requestUrl = `${proxyUrl}${cacheBuster}`;
+      
+      const response = await fetch(requestUrl);
       
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+        // Try to parse error message from JSON response
+        let errorMessage = `HTTP error! Status: ${response.status}`;
+        try {
+          if (response.headers.get('Content-Type')?.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          }
+        } catch (e) {
+          // Ignore JSON parsing errors
+        }
+        
+        throw new Error(errorMessage);
       }
       return response;
     } catch (error) {
       lastError = error as Error;
+      console.warn(`Fetch attempt ${attempt + 1}/${maxRetries} failed:`, error);
+      
       // Wait longer between each retry (exponential backoff)
       const delay = Math.pow(2, attempt) * 1000;
       await new Promise(resolve => setTimeout(resolve, delay));

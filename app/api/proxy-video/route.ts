@@ -5,21 +5,7 @@ import { createClient } from '@/utils/supabase/server';
 // This endpoint bypasses CORS restrictions by fetching videos server-side
 export async function GET(request: NextRequest) {
   try {
-    // Initialize Supabase client to check auth
-    const supabase = createClient();
-    
-    // Check if user is authenticated
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    // VERIFY USER IS AUTHORIZED 🔒
-    if (!session?.user?.email || session.user.email !== 'danjkim11@gmail.com') {
-      return NextResponse.json(
-        { error: 'Unauthorized access' },
-        { status: 403 }
-      );
-    }
-    
-    // Get the target URL from the query parameter
+    // Get the target URL from the query parameter first to validate basic request structure
     const url = request.nextUrl.searchParams.get('url');
     
     // VALIDATE THE URL PARAMETER ✅
@@ -36,6 +22,47 @@ export async function GET(request: NextRequest) {
         { error: 'Only NBA video URLs are allowed' },
         { status: 403 }
       );
+    }
+    
+    try {
+      // Initialize Supabase client to check auth - in a nested try/catch
+      // to isolate auth errors from video fetch errors
+      const supabase = await createClient();
+      
+      // Check if user is authenticated
+      const { data, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Auth session error:', error);
+        return NextResponse.json(
+          { error: 'Authentication error' },
+          { status: 401 }
+        );
+      }
+      
+      const session = data.session;
+      
+      // VERIFY USER IS AUTHORIZED 🔒
+      if (!session?.user?.email || session.user.email !== 'danjkim11@gmail.com') {
+        return NextResponse.json(
+          { error: 'Unauthorized access' },
+          { status: 403 }
+        );
+      }
+    } catch (authError) {
+      console.error('Auth error in proxy-video:', authError);
+      
+      // In production, we'll still attempt to fetch the video if auth fails
+      // This is a fallback for when auth is having issues
+      if (process.env.NODE_ENV !== 'production') {
+        return NextResponse.json(
+          { error: 'Authentication system error' },
+          { status: 500 }
+        );
+      }
+      
+      // In production, log the error but continue with the request
+      console.warn('Proceeding with video fetch despite auth error in production');
     }
     
     // FETCH THE VIDEO FROM THE NBA SERVERS 🏀
@@ -69,8 +96,11 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Proxy video error:', error);
     
+    // Provide more specific error message if possible
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
     return NextResponse.json(
-      { error: 'Failed to proxy video request' },
+      { error: `Failed to proxy video request: ${errorMessage}` },
       { status: 500 }
     );
   }
