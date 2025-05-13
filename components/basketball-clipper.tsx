@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Calendar, Star, ArrowUpDown, SortDesc, Filter, Search, X, Download, CheckSquare, Square } from 'lucide-react'
 import JSZip from 'jszip'
+import { DateRange } from "react-day-picker"
+import { format } from "date-fns"
 
 // Import Shadcn components
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
+import { DateRangePicker } from "@/components/ui/date-range-picker"
 
 // Import auth hook
 import { useAuth } from "@/hooks/use-auth"
@@ -78,6 +81,38 @@ const formatDate = (dateString: string) => {
     day: 'numeric' 
   })
 }
+
+// SORT BASKETBALL PLAYS BY GAME DATE, PERIOD, AND GAME TIME ⏱️
+const sortBasketballPlays = (plays: BasketballPlay[]): BasketballPlay[] => {
+  return [...plays].sort((a, b) => {
+    // First sort by date (oldest to newest)
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    if (dateA !== dateB) return dateA - dateB;
+    
+    // Group by game - compare game IDs
+    if (a.game_id !== b.game_id) {
+      return a.game_id.localeCompare(b.game_id);
+    }
+    
+    // Then sort by period (1st quarter to 4th quarter/OT)
+    if (a.period !== b.period) return a.period - b.period;
+    
+    // Within the same period, sort by point differential (game getting closer or further apart)
+    // This is a good proxy for "importance" within a period
+    const diffA = Math.abs(a.home_score_after - a.visitor_score_after);
+    const diffB = Math.abs(b.home_score_after - b.visitor_score_after);
+    if (diffA !== diffB) return diffA - diffB; // Closer games first
+    
+    // If same differential, sort by total score (higher scoring plays later)
+    const totalScoreA = a.home_score_after + a.visitor_score_after;
+    const totalScoreB = b.home_score_after + b.visitor_score_after;
+    if (totalScoreA !== totalScoreB) return totalScoreA - totalScoreB;
+    
+    // Finally, use event_id as a tiebreaker (proxy for game time within period)
+    return a.event_id - b.event_id;
+  });
+};
 
 // FORMATS BASKETBALL CONTEXT MEASURES INTO HUMAN-READABLE TEXT 🏀
 const formatContextMeasure = (measure: string): string => {
@@ -307,6 +342,20 @@ const availableTagFilters = [
   { key: 'distance', value: 'Half court', label: 'Half Court', icon: '🛰️' },
 ];
 
+// ADVANCED SORTING HELPER FOR CHRONOLOGICAL GAME TIME SORTING 🏀⏱️
+const sortByGameChronology = (a: BasketballPlay, b: BasketballPlay, isAscending: boolean = true): number => {
+  // First by period (1st quarter to 4th quarter/OT)
+  if (a.period !== b.period) return isAscending ? a.period - b.period : b.period - a.period;
+  
+  // Within the same period, sort by total score (lower scoring plays are earlier in the game)
+  const totalScoreA = a.home_score_after + a.visitor_score_after;
+  const totalScoreB = b.home_score_after + b.visitor_score_after;
+  if (totalScoreA !== totalScoreB) return isAscending ? totalScoreA - totalScoreB : totalScoreB - totalScoreA;
+  
+  // Finally, use event_id as a tiebreaker (proxy for game time within period)
+  return isAscending ? a.event_id - b.event_id : b.event_id - a.event_id;
+};
+
 // HELPER FOR CHECKING IF A PLAY HAS A SPECIFIC TAG 🔍
 const hasTag = (play: BasketballPlay, tagKey: string, tagValue: any): boolean => {
   if (!play.tags || !Array.isArray(play.tags)) return false;
@@ -375,6 +424,7 @@ export default function BasketballClipper({ data }: ClipperProps) {
   const [activeTagFilters, setActiveTagFilters] = useState<{key: string, value: any}[]>([]) // Tag filters
   const [searchQuery, setSearchQuery] = useState('') // Description search
   const [showFilters, setShowFilters] = useState(false) // Toggle filter panel
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined) // Add date range state
   
   // Download modal state
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false)
@@ -408,7 +458,7 @@ export default function BasketballClipper({ data }: ClipperProps) {
   const filteredAndSortedResults = useMemo(() => {
     if (!data?.results) return [];
     
-    // First filter by tag filters and search query
+    // First filter by tag filters, search query, and date range
     let filtered = [...data.results];
     
     // Apply tag filters if any are active
@@ -429,6 +479,35 @@ export default function BasketballClipper({ data }: ClipperProps) {
       );
     }
     
+    // Apply date range filter if present
+    if (dateRange && dateRange.from) {
+      // Set the time to start of day
+      const fromDate = new Date(dateRange.from);
+      fromDate.setHours(0, 0, 0, 0);
+      
+      // If there's a to date, set time to end of day
+      let toDate: Date | null = null;
+      if (dateRange.to) {
+        toDate = new Date(dateRange.to);
+        toDate.setHours(23, 59, 59, 999);
+      }
+      
+      filtered = filtered.filter(play => {
+        const playDate = new Date(play.date);
+        if (toDate) {
+          // Between from and to dates (inclusive)
+          return playDate >= fromDate && playDate <= toDate;
+        } else {
+          // Single date selected - match the from date
+          const playDateOnly = new Date(playDate);
+          playDateOnly.setHours(0, 0, 0, 0);
+          const fromDateOnly = new Date(fromDate);
+          fromDateOnly.setHours(0, 0, 0, 0);
+          return playDateOnly.getTime() === fromDateOnly.getTime();
+        }
+      });
+    }
+    
     // Then apply sorting
     if (sortOption === 'default') return filtered;
     
@@ -438,17 +517,25 @@ export default function BasketballClipper({ data }: ClipperProps) {
       
       // Sort by date (newest to oldest)
       if (sortOption === 'date-desc') {
-        return dateB - dateA;
+        // First compare dates (newest first)
+        if (dateA !== dateB) return dateB - dateA;
+        
+        // If same date, use advanced game chronology sorting (latest plays in game first)
+        return sortByGameChronology(a, b, false);
       }
       
       // Sort by date (oldest to newest)
       if (sortOption === 'date-asc') {
-        return dateA - dateB;
+        // First compare dates (oldest first)
+        if (dateA !== dateB) return dateA - dateB;
+        
+        // If same date, use advanced game chronology sorting (earliest plays in game first)
+        return sortByGameChronology(a, b, true);
       }
       
       return 0; // Fallback
     });
-  }, [data?.results, sortOption, activeTagFilters, searchQuery]);
+  }, [data?.results, sortOption, activeTagFilters, searchQuery, dateRange]);
   
   // Initialize selected plays for download - default to first 10 in KB score sort
   useEffect(() => {
@@ -467,7 +554,7 @@ export default function BasketballClipper({ data }: ClipperProps) {
   // Reset visible count when filters change
   useEffect(() => {
     setVisibleCount(10);
-  }, [activeTagFilters, searchQuery, sortOption]);
+  }, [activeTagFilters, searchQuery, sortOption, dateRange]);
   
   // Toggle a tag filter
   const toggleTagFilter = useCallback((tagKey: string, tagValue: any) => {
@@ -493,10 +580,43 @@ export default function BasketballClipper({ data }: ClipperProps) {
   const clearAllFilters = useCallback(() => {
     setActiveTagFilters([]);
     setSearchQuery('');
+    setDateRange(undefined); // Also clear date range
     if (searchInputRef.current) {
       searchInputRef.current.value = '';
     }
   }, []);
+  
+  // Handle opening the download modal - only include filtered plays if filters are active
+  const openDownloadModal = useCallback(() => {
+    // Determine if we're using filtered results
+    const isFiltered = activeTagFilters.length > 0 || searchQuery.trim() !== '' || Boolean(dateRange);
+    
+    // If filters are active, only include the filtered plays
+    if (isFiltered && filteredAndSortedResults.length > 0) {
+      const filteredPlayIds = new Set<string>();
+      
+      // Add all filtered plays to the selection
+      filteredAndSortedResults.forEach(play => {
+        filteredPlayIds.add(`${play.game_id}-${play.event_id}`);
+      });
+      
+      // Update the selection
+      setSelectedPlaysForDownload(filteredPlayIds);
+    } else {
+      // If no filters, use the default selection (first 10 plays or all if less than 10)
+      const initialPlaysToSelect = Math.min(10, data.results.length);
+      const initialSelectedPlays = new Set<string>();
+      
+      for (let i = 0; i < initialPlaysToSelect; i++) {
+        initialSelectedPlays.add(`${data.results[i].game_id}-${data.results[i].event_id}`);
+      }
+      
+      setSelectedPlaysForDownload(initialSelectedPlays);
+    }
+    
+    // Open the modal
+    setIsDownloadModalOpen(true);
+  }, [activeTagFilters, searchQuery, dateRange, filteredAndSortedResults, data?.results]);
   
   // Load more videos when user scrolls to the bottom
   const loadMore = useCallback(() => {
@@ -557,20 +677,41 @@ export default function BasketballClipper({ data }: ClipperProps) {
   
   // Toggle all plays - select or deselect all
   const toggleAllPlays = useCallback(() => {
-    if (!data?.results) return;
+    // Determine which plays to toggle based on filters
+    const isFiltered = activeTagFilters.length > 0 || searchQuery.trim() !== '' || Boolean(dateRange);
+    const playsToToggle = isFiltered ? filteredAndSortedResults : data?.results || [];
     
-    if (selectedPlaysForDownload.size === data.results.length) {
-      // Deselect all
-      setSelectedPlaysForDownload(new Set());
-    } else {
-      // Select all
-      const allPlays = new Set<string>();
-      data.results.forEach(play => {
-        allPlays.add(`${play.game_id}-${play.event_id}`);
+    // Check if all plays are already selected
+    let allSelected = true;
+    playsToToggle.forEach(play => {
+      const playId = `${play.game_id}-${play.event_id}`;
+      if (!selectedPlaysForDownload.has(playId)) {
+        allSelected = false;
+      }
+    });
+    
+    if (allSelected) {
+      // Deselect all filtered plays
+      setSelectedPlaysForDownload(prev => {
+        const newSet = new Set(prev);
+        playsToToggle.forEach(play => {
+          const playId = `${play.game_id}-${play.event_id}`;
+          newSet.delete(playId);
+        });
+        return newSet;
       });
-      setSelectedPlaysForDownload(allPlays);
+    } else {
+      // Select all filtered plays
+      setSelectedPlaysForDownload(prev => {
+        const newSet = new Set(prev);
+        playsToToggle.forEach(play => {
+          const playId = `${play.game_id}-${play.event_id}`;
+          newSet.add(playId);
+        });
+        return newSet;
+      });
     }
-  }, [data?.results, selectedPlaysForDownload]);
+  }, [data?.results, selectedPlaysForDownload, activeTagFilters, searchQuery, dateRange, filteredAndSortedResults]);
   
   // Handle download action
   const handleDownload = useCallback(async (onlyFailedPlays = false) => {
@@ -721,9 +862,9 @@ export default function BasketballClipper({ data }: ClipperProps) {
             .replace(/_+/g, '_')
             .substring(0, 30);
           
-          // Add to zip with a descriptive filename
-          const fileName = `${play.date.split('T')[0]}_${play.visiting_team}_at_${play.home_team}_${safeDescription}.mp4`;
-          videoBlobs[fileName] = videoBlob;
+          // Store the blob with a key that includes the play ID for reliable retrieval
+          const blobKey = `${play.game_id}-${play.event_id}`;
+          videoBlobs[blobKey] = videoBlob;
           
           // Mark as successful
           successfulPlays.add(id);
@@ -768,13 +909,126 @@ export default function BasketballClipper({ data }: ClipperProps) {
         throw new Error('No videos could be downloaded. Please try again later.');
       }
       
-      // Add all video blobs to the zip
-      Object.entries(videoBlobs).forEach(([fileName, blob]) => {
-        videosFolder?.file(fileName, blob);
+      // Sort the plays chronologically for organized viewing
+      const sortedPlays: BasketballPlay[] = [];
+      const playsToProcess = Array.from(successfulPlays).map(id => {
+        const [gameId, eventId] = id.split('-');
+        return data.results.find(p => p.game_id === gameId && p.event_id === Number(eventId));
+      }).filter(Boolean) as BasketballPlay[];
+      
+      // Apply sorting based on current sort option
+      let sortedPlaysArray: BasketballPlay[];
+      
+      // If we have active filters or sorting, maintain the current display order
+      if (sortOption !== 'default' || activeTagFilters.length > 0 || searchQuery.trim() !== '' || Boolean(dateRange)) {
+        // Create a map of play IDs for lookup
+        const playIdMap = new Map<string, BasketballPlay>();
+        playsToProcess.forEach(play => {
+          playIdMap.set(`${play.game_id}-${play.event_id}`, play);
+        });
+        
+        // Use the current filtered and sorted results order, filtering to just the downloaded plays
+        sortedPlaysArray = filteredAndSortedResults
+          .filter(play => successfulPlays.has(`${play.game_id}-${play.event_id}`))
+          // Ensure all successfully downloaded plays are included (even if not in filtered results)
+          .concat(playsToProcess.filter(play => 
+            !filteredAndSortedResults.some(p => 
+              p.game_id === play.game_id && p.event_id === play.event_id
+            )
+          ));
+      } else {
+        // Default sort (KB Score) when no filters or custom sorting is applied
+        sortedPlaysArray = sortBasketballPlays(playsToProcess);
+      }
+      
+      // Add all video blobs to the zip in sorted order
+      sortedPlaysArray.forEach((play, index) => {
+        // Create a safe filename from play description
+        const safeDescription = play.description
+          .replace(/[^a-z0-9]/gi, '_')
+          .replace(/_+/g, '_')
+          .substring(0, 30);
+        
+        // Create a filename with period and score info for better organization
+        const periodLabel = play.period > 4 ? `OT${play.period - 4}` : `Q${play.period}`;
+        const scoreInfo = `${play.visitor_score_after}-${play.home_score_after}`;
+        
+        // Add a numeric prefix for maintaining sort order in file explorers
+        const paddedIndex = String(index + 1).padStart(3, '0');
+        
+        // Format: 001_YYYY-MM-DD_Q1_TEAM_vs_TEAM_SCORE_description.mp4
+        const fileName = `${paddedIndex}_${play.date.split('T')[0]}_${periodLabel}_${play.visiting_team}_vs_${play.home_team}_${scoreInfo}_${safeDescription}.mp4`;
+        
+        // Get the blob using the play ID as the key
+        const blobKey = `${play.game_id}-${play.event_id}`;
+        const blob = videoBlobs[blobKey];
+        
+        if (blob) {
+          videosFolder?.file(fileName, blob);
+        }
       });
       
       // Add metadata file
-      videosFolder?.file('metadata.json', JSON.stringify(metadataContent, null, 2));
+      const enhancedMetadata = {
+        ...metadataContent,
+        downloadDate: new Date().toISOString(),
+        totalPlays: downloadedCount,
+        failedPlays: errors.length,
+        sortOption,
+        sortingCriteria: sortOption === 'date-desc' 
+          ? [
+              "Date (newest to oldest)",
+              "For plays on the same date:",
+              "- Later game periods first (4th quarter/OT before 1st quarter)",
+              "- Within the same period, higher total scores first (later game moments)",
+              "- Event ID as tiebreaker (later events first)"
+            ]
+          : sortOption === 'date-asc'
+          ? [
+              "Date (oldest to newest)",
+              "For plays on the same date:",
+              "- Earlier game periods first (1st quarter before 4th quarter/OT)",
+              "- Within the same period, lower total scores first (earlier game moments)",
+              "- Event ID as tiebreaker (earlier events first)"
+            ]
+          : [
+              "Date (oldest to newest)",
+              "Game ID (to group plays from the same game)",
+              "Period (1st quarter to 4th quarter/OT)",
+              "Point differential (closer games first)",
+              "Total score (lower scoring first)",
+              "Event ID (chronological within period)"
+            ],
+        plays: sortedPlaysArray.map((play, index) => {
+          // Create the same filename used in the ZIP for reference
+          const safeDescription = play.description
+            .replace(/[^a-z0-9]/gi, '_')
+            .replace(/_+/g, '_')
+            .substring(0, 30);
+          const periodLabel = play.period > 4 ? `OT${play.period - 4}` : `Q${play.period}`;
+          const scoreInfo = `${play.visitor_score_after}-${play.home_score_after}`;
+          const paddedIndex = String(index + 1).padStart(3, '0');
+          const fileName = `${paddedIndex}_${play.date.split('T')[0]}_${periodLabel}_${play.visiting_team}_vs_${play.home_team}_${scoreInfo}_${safeDescription}.mp4`;
+          
+          return {
+            fileName,
+            index: index + 1,
+            gameId: play.game_id,
+            eventId: play.event_id,
+            date: play.date,
+            period: play.period,
+            periodLabel,
+            teams: `${play.visiting_team} @ ${play.home_team}`,
+            description: play.description,
+            scoreBeforePlay: `${play.visitor_score_before}-${play.home_score_before}`,
+            scoreAfterPlay: `${play.visitor_score_after}-${play.home_score_after}`,
+            pointDifferential: Math.abs(play.home_score_after - play.visitor_score_after),
+            tags: play.tags || []
+          };
+        })
+      };
+      
+      videosFolder?.file('metadata.json', JSON.stringify(enhancedMetadata, null, 2));
       
       // Add a README file with instructions
       const readmeContent = `# Basketball Plays Collection
@@ -784,8 +1038,45 @@ This collection contains ${downloadedCount} basketball plays ${data.parameters.p
 ${errors.length > 0 ? `\n⚠️ Note: ${errors.length} videos failed to download.\n` : ''}
 
 ## Contents
-- MP4 video files of each play
+- MP4 video files of each play, sorted ${sortOption === 'date-desc' ? 'from newest to oldest' : sortOption === 'date-asc' ? 'from oldest to newest' : 'by KB Score'}
 - metadata.json with details about each play
+
+## File Naming Convention
+Files are named with the following format:
+\`\`\`
+001_YYYY-MM-DD_Q1_TEAM_vs_TEAM_SCORE_description.mp4
+\`\`\`
+
+Where:
+- 001: Sequential number to maintain sort order
+- YYYY-MM-DD: Date of the game
+- Q1/Q2/Q3/Q4/OT1: Game period (quarter or overtime)
+- TEAM_vs_TEAM: The teams playing
+- SCORE: The score after the play (visitor-home)
+- description: Brief description of the play
+
+## Sorting Criteria
+${sortOption === 'date-desc' ? 
+`Plays are sorted by:
+1. Date (newest to oldest)
+2. For plays on the same date:
+   - Later game periods first (4th quarter/OT before 1st quarter)
+   - Within the same period, higher total scores first (later game moments)
+   - Event ID as tiebreaker (later events first)` : 
+sortOption === 'date-asc' ? 
+`Plays are sorted by:
+1. Date (oldest to newest)
+2. For plays on the same date:
+   - Earlier game periods first (1st quarter before 4th quarter/OT)
+   - Within the same period, lower total scores first (earlier game moments)
+   - Event ID as tiebreaker (earlier events first)` : 
+`Plays are sorted by:
+1. Date (oldest to newest)
+2. Game ID (to group plays from the same game)
+3. Period (1st quarter to 4th quarter/OT)
+4. Point differential (closer games first)
+5. Total score (lower scoring first)
+6. Event ID (chronological within period)`}
 
 ## Search Parameters
 ${Object.entries(data.parameters).map(([key, value]) => `- ${key}: ${value}`).join('\n')}
@@ -946,7 +1237,8 @@ Enjoy your basketball highlights!
   }
   
   // No filtered results state
-  const noFilteredResults = filteredAndSortedResults.length === 0 && (activeTagFilters.length > 0 || searchQuery.trim() !== '');
+  const noFilteredResults = filteredAndSortedResults.length === 0 && 
+    (activeTagFilters.length > 0 || searchQuery.trim() !== '' || Boolean(dateRange));
   
   return (
     <div className="w-full max-w-full animate-fade-in opacity-0" ref={containerRef}>
@@ -994,6 +1286,16 @@ Enjoy your basketball highlights!
               )}
             </div>
             
+            {/* DATE RANGE PICKER - FIXED WIDTH */}
+            <div className="w-[220px]">
+              <DateRangePicker
+                dateRange={dateRange}
+                onDateRangeChange={setDateRange}
+                placeholder="Filter by date"
+                numberOfMonths={1}
+              />
+            </div>
+            
             {/* SORT DROPDOWN - FIXED WIDTH */}
             <Select 
               defaultValue={sortOption} 
@@ -1010,8 +1312,8 @@ Enjoy your basketball highlights!
               </SelectTrigger>
               <SelectContent className="bg-background/95 backdrop-blur-sm border-white/10">
                 <SelectItem value="default">KB Score</SelectItem>
-                <SelectItem value="date-desc">Recent</SelectItem>
-                <SelectItem value="date-asc">Oldest</SelectItem>
+                <SelectItem value="date-desc">Newest First</SelectItem>
+                <SelectItem value="date-asc">Oldest First</SelectItem>
               </SelectContent>
             </Select>
             
@@ -1030,7 +1332,7 @@ Enjoy your basketball highlights!
             {/* DOWNLOAD BUTTON */}
             {isAuthorizedForDownload && (
               <Button 
-                onClick={() => setIsDownloadModalOpen(true)}
+                onClick={openDownloadModal}
                 variant="outline"
                 className="w-[140px] h-9 rounded-sm bg-blue-500/20 text-blue-300 border border-blue-400/30 hover:bg-blue-500/30 hover:text-blue-200"
               >
@@ -1040,7 +1342,7 @@ Enjoy your basketball highlights!
             )}
             
             {/* CLEAR ALL BUTTON - ONLY SHOW IF FILTERS ARE ACTIVE */}
-            {(activeTagFilters.length > 0 || searchQuery) && (
+            {(activeTagFilters.length > 0 || searchQuery || dateRange) && (
               <Button 
                 onClick={clearAllFilters}
                 variant="destructive"
@@ -1083,7 +1385,7 @@ Enjoy your basketball highlights!
           )}
           
           {/* ACTIVE FILTERS DISPLAY */}
-          {activeTagFilters.length > 0 && (
+          {(activeTagFilters.length > 0 || dateRange) && (
             <div className="px-3 py-2 border-t  flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium uppercase text-gray-400">Active:</span>
               {activeTagFilters.map((filter, index) => {
@@ -1110,6 +1412,28 @@ Enjoy your basketball highlights!
                   </Badge>
                 );
               })}
+              
+              {/* DATE RANGE BADGE */}
+              {dateRange && dateRange.from && (
+                <Badge 
+                  variant="outline"
+                  className="px-2 py-1 gap-1.5 font-medium rounded-sm flex items-center bg-purple-500/20 border-purple-400/40 text-purple-200"
+                >
+                  <span>📅</span>
+                  <span>
+                    {format(dateRange.from, "MMM d, yyyy")}
+                    {dateRange.to && ` - ${format(dateRange.to, "MMM d, yyyy")}`}
+                  </span>
+                  <Button 
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 p-0 ml-1 rounded-full hover:bg-white/10"
+                    onClick={() => setDateRange(undefined)}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </Button>
+                </Badge>
+              )}
             </div>
           )}
         </div>
@@ -1122,7 +1446,15 @@ Enjoy your basketball highlights!
             <DialogHeader>
               <DialogTitle className="text-xl">Download Basketball Plays</DialogTitle>
               <DialogDescription>
-                Select the plays you want to download as a ZIP file. We'll bundle the videos together for you.
+                {activeTagFilters.length > 0 || searchQuery.trim() !== '' || Boolean(dateRange) ? (
+                  <>
+                    Download your <span className="font-medium text-primary">{selectedPlaysForDownload.size} filtered plays</span> as a ZIP file.
+                  </>
+                ) : (
+                  <>
+                    Select the plays you want to download as a ZIP file. We'll bundle the videos together for you.
+                  </>
+                )}
               </DialogDescription>
             </DialogHeader>
             
@@ -1139,6 +1471,35 @@ Enjoy your basketball highlights!
               </p>
             </div>
             
+            {/* FILTER ACTIVE NOTICE */}
+            {(activeTagFilters.length > 0 || searchQuery.trim() !== '' || Boolean(dateRange)) && (
+              <div className="p-3 bg-amber-950/50 border border-amber-900/50 rounded-md mb-4">
+                <h4 className="text-sm font-medium text-amber-300 flex items-center mb-1">
+                  <span className="mr-2">🔍</span>
+                  <span>Filters Active</span>
+                </h4>
+                <p className="text-xs text-amber-200/80">
+                  You have active filters. Only the {filteredAndSortedResults.length} filtered plays are shown below.
+                  {activeTagFilters.length > 0 && (
+                    <span className="block mt-1">
+                      Active tags: {activeTagFilters.map(f => getTagDisplayValue(f.key, f.value)).join(', ')}
+                    </span>
+                  )}
+                  {searchQuery.trim() !== '' && (
+                    <span className="block mt-1">
+                      Search query: "{searchQuery.trim()}"
+                    </span>
+                  )}
+                  {dateRange && dateRange.from && (
+                    <span className="block mt-1">
+                      Date range: {format(dateRange.from, "MMM d, yyyy")}
+                      {dateRange.to && ` - ${format(dateRange.to, "MMM d, yyyy")}`}
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
+            
             {/* SELECT ALL & COUNTER */}
             <div className="flex items-center justify-between py-2 border-b border-gray-700 mb-4">
               <div className="flex items-center gap-2">
@@ -1147,22 +1508,74 @@ Enjoy your basketball highlights!
                   className="p-2 h-auto text-sm flex items-center gap-2"
                   onClick={toggleAllPlays}
                 >
-                  {selectedPlaysForDownload.size === data?.results?.length ? (
-                    <CheckSquare className="h-4 w-4 text-primary" />
-                  ) : (
-                    <Square className="h-4 w-4" />
+                  {/* Check if all filtered plays are selected */}
+                  {((activeTagFilters.length > 0 || searchQuery.trim() !== '' || Boolean(dateRange)) 
+                    ? (filteredAndSortedResults.every(play => 
+                        selectedPlaysForDownload.has(`${play.game_id}-${play.event_id}`)
+                      ) 
+                        ? <CheckSquare className="h-4 w-4 text-primary" />
+                        : <Square className="h-4 w-4" />
+                      )
+                    : (selectedPlaysForDownload.size === data?.results?.length 
+                        ? <CheckSquare className="h-4 w-4 text-primary" />
+                        : <Square className="h-4 w-4" />
+                      )
                   )}
-                  <span>{selectedPlaysForDownload.size === data?.results?.length ? 'Deselect All' : 'Select All'}</span>
+                  <span>
+                    {((activeTagFilters.length > 0 || searchQuery.trim() !== '' || Boolean(dateRange)) 
+                      ? (filteredAndSortedResults.every(play => 
+                          selectedPlaysForDownload.has(`${play.game_id}-${play.event_id}`)
+                        ) 
+                          ? 'Deselect All Filtered' 
+                          : 'Select All Filtered'
+                        )
+                      : (selectedPlaysForDownload.size === data?.results?.length 
+                          ? 'Deselect All' 
+                          : 'Select All'
+                        )
+                    )}
+                  </span>
                 </Button>
               </div>
               <div className="text-sm text-muted-foreground">
-                {selectedPlaysForDownload.size} of {data?.results?.length} selected
+                {selectedPlaysForDownload.size} of {((activeTagFilters.length > 0 || searchQuery.trim() !== '' || Boolean(dateRange))
+                  ? filteredAndSortedResults.length 
+                  : data?.results?.length)} selected
               </div>
             </div>
             
             {/* PLAY SELECTION LIST */}
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-              {data?.results?.map((play, index) => {
+              {/* Show plays in current sort order */}
+              {((activeTagFilters.length > 0 || searchQuery.trim() !== '' || Boolean(dateRange)) 
+                ? filteredAndSortedResults 
+                : sortOption !== 'default'
+                  ? [...data?.results].sort((a, b) => {
+                      const dateA = new Date(a.date).getTime();
+                      const dateB = new Date(b.date).getTime();
+                      
+                      // Sort by date (newest to oldest)
+                      if (sortOption === 'date-desc') {
+                        // First compare dates (newest first)
+                        if (dateA !== dateB) return dateB - dateA;
+                        
+                        // If same date, use advanced game chronology sorting (latest plays in game first)
+                        return sortByGameChronology(a, b, false);
+                      }
+                      
+                      // Sort by date (oldest to newest)
+                      if (sortOption === 'date-asc') {
+                        // First compare dates (oldest first)
+                        if (dateA !== dateB) return dateA - dateB;
+                        
+                        // If same date, use advanced game chronology sorting (earliest plays in game first)
+                        return sortByGameChronology(a, b, true);
+                      }
+                      
+                      return 0; // Fallback
+                    })
+                  : data?.results
+              )?.map((play, index) => {
                 const playId = `${play.game_id}-${play.event_id}`;
                 const isSelected = selectedPlaysForDownload.has(playId);
                 const { home, away } = extractTeams(play.game_code);
