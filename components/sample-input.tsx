@@ -28,7 +28,7 @@ const filmQuestions = [
   "LeBron James clutch blocks in the 2016 playoffs",
   "Wembanyama floating threes",
   "James Harden stepback threes in 2019",
-  "Trae Young threes from downtown",
+  "Tyrese Haliburton clutch threes",
   "Jaylen Brown clutch buckets in the 2024 playoffs",
   "2017 Kevin Durant mid range shots",
   "Nikola Jokic assists in the 2023 playoffs",
